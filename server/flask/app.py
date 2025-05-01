@@ -38,7 +38,12 @@ except ImportError:
 
 # Create a mock Vanna implementation for demo purposes
 class MockVanna:
-    def __init__(self):
+    def __init__(self, api_key=None):
+        # Store the API key for potential future use
+        self.api_key = api_key
+        if api_key:
+            logger.info("MockVanna initialized with API key")
+        
         self.sql_templates = {
             "revenue": "SELECT product_name, SUM(unit_price * quantity) as revenue FROM products JOIN order_details ON products.product_id = order_details.product_id GROUP BY product_name ORDER BY revenue DESC LIMIT 5",
             "orders": "SELECT country, COUNT(*) as order_count FROM customers JOIN orders ON customers.customer_id = orders.customer_id GROUP BY country ORDER BY order_count DESC",
@@ -240,7 +245,8 @@ def get_example_questions():
         except Exception as e:
             logger.error(f"Error with Vanna API: {str(e)}")
             # Fall back to mock implementation if real Vanna fails
-            vn = MockVanna()
+            api_key = os.environ.get("VANNA_API_KEY")
+            vn = MockVanna(api_key=api_key)
             example_questions = vn.get_example_questions()
             logger.warning("Using mock example questions")
             
@@ -255,16 +261,26 @@ def get_training_data():
     try:
         # Always try to use the real Vanna API first
         try:
-            # Create a new instance of Vanna
-            vn = vanna.Vanna()
-            # Use demo mode which doesn't require an API key
-            vn.init_vanna_model()
+            # Get API key from environment
+            api_key = os.environ.get("VANNA_API_KEY")
+            if api_key:
+                # Create a new instance of Vanna with the API key
+                vn = vanna.Vanna(api_key=api_key)
+                logger.info("Initializing Vanna with API key")
+            else:
+                # Create a new instance of Vanna
+                vn = vanna.Vanna()
+                # Use demo mode which doesn't require an API key
+                logger.info("Initializing Vanna in demo mode (no API key found)")
+                vn.init_vanna_model()
+            
             training_data = vn.get_training_data()
             logger.info("Successfully fetched training data from Vanna API")
         except Exception as e:
             logger.error(f"Error with Vanna API: {str(e)}")
             # Fall back to mock implementation if real Vanna fails
-            vn = MockVanna()
+            api_key = os.environ.get("VANNA_API_KEY")
+            vn = MockVanna(api_key=api_key)
             training_data = vn.get_training_data()
             logger.warning("Using mock training data")
             
@@ -284,15 +300,24 @@ def train_model():
             
         # Always try to use the real Vanna API first
         try:
-            # Create a new instance of Vanna
-            vn = vanna.Vanna()
-            # Use demo mode which doesn't require an API key
-            vn.init_vanna_model()
+            # Get API key from environment
+            api_key = os.environ.get("VANNA_API_KEY")
+            if api_key:
+                # Create a new instance of Vanna with the API key
+                vn = vanna.Vanna(api_key=api_key)
+                logger.info("Initializing Vanna with API key for training")
+            else:
+                # Create a new instance of Vanna
+                vn = vanna.Vanna()
+                # Use demo mode which doesn't require an API key
+                logger.info("Initializing Vanna in demo mode (no API key found) for training")
+                vn.init_vanna_model()
             logger.info("Initialized Vanna API for training")
         except Exception as e:
             logger.error(f"Error with Vanna API: {str(e)}")
             # Fall back to mock implementation if real Vanna fails
-            vn = MockVanna()
+            api_key = os.environ.get("VANNA_API_KEY")
+            vn = MockVanna(api_key=api_key)
             logger.warning("Using mock implementation for training")
             
         # Train the model with the provided data
@@ -370,7 +395,8 @@ def process_query():
             logger.error(f"Error initializing Vanna API: {str(e)}")
             # Only use mock as a fallback if real Vanna fails
             logger.warning("Falling back to mock implementation as Vanna isn't available")
-            vn = MockVanna()
+            api_key = os.environ.get("VANNA_API_KEY")
+            vn = MockVanna(api_key=api_key)
         
         # Extract database schema information or use mock data
         try:
