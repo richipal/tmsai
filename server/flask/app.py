@@ -184,17 +184,11 @@ def process_query():
         else:
             return jsonify({"error": f"Unsupported database type: {conn_type}"}), 400
         
-        # Create or get a database engine
-        engine_key = f"{connection_info['host']}:{connection_info['port']}/{connection_info['database']}"
-        if engine_key not in db_engines:
-            try:
-                engine = sqlalchemy.create_engine(conn_str)
-                db_engines[engine_key] = engine
-            except Exception as e:
-                logger.error(f"Error creating database connection: {str(e)}")
-                return jsonify({"error": f"Database connection error: {str(e)}"}), 500
-        
-        engine = db_engines[engine_key]
+        # In demo mode, we don't actually connect to a database
+        # Just log the connection info for reference
+        logger.info(f"Demo mode: Would connect to {conn_type} database at {connection_info['host']}:{connection_info['port']}/{connection_info['database']}")
+        # Create a placeholder for the engine
+        engine = None
         
         # Initialize Vanna AI or use mock implementation
         if VANNA_AVAILABLE:
@@ -209,45 +203,20 @@ def process_query():
         
         # Extract database schema information or use mock data
         try:
-            if SQLALCHEMY_AVAILABLE:
-                inspector = sqlalchemy.inspect(engine)
-                tables = inspector.get_table_names()
-                
-                # Extract table definitions
-                for table in tables:
-                    columns = inspector.get_columns(table)
-                    column_info = []
-                    for column in columns:
-                        column_info.append({
-                            "name": column['name'],
-                            "type": str(column['type'])
-                        })
-                    
-                    # Add the table definition to Vanna
-                    ddl = f"CREATE TABLE {table} ("
-                    for i, col in enumerate(column_info):
-                        if i > 0:
-                            ddl += ", "
-                        ddl += f"{col['name']} {col['type']}"
-                    ddl += ");"
-                    vn.train_ddl(ddl)
-            else:
-                # Use mock tables for demo purposes
-                logger.info("Using mock schema since SQLAlchemy is not available")
-                mock_tables = [
-                    "CREATE TABLE customers (customer_id VARCHAR PRIMARY KEY, company_name VARCHAR, contact_name VARCHAR, country VARCHAR);",
-                    "CREATE TABLE products (product_id INT PRIMARY KEY, product_name VARCHAR, unit_price DECIMAL);",
-                    "CREATE TABLE orders (order_id INT PRIMARY KEY, customer_id VARCHAR, order_date DATE);",
-                    "CREATE TABLE order_details (order_id INT, product_id INT, quantity INT, unit_price DECIMAL);"
-                ]
-                for ddl in mock_tables:
-                    vn.train_ddl(ddl)
-            
-            # Optionally, you can also add documentation
-            # vn.train_documentation(documentation)
+            # Always use mock tables for demo purposes to avoid connection errors
+            logger.info("Using mock schema for demo purposes")
+            mock_tables = [
+                "CREATE TABLE customers (customer_id VARCHAR PRIMARY KEY, company_name VARCHAR, contact_name VARCHAR, country VARCHAR);",
+                "CREATE TABLE products (product_id INT PRIMARY KEY, product_name VARCHAR, unit_price DECIMAL);",
+                "CREATE TABLE orders (order_id INT PRIMARY KEY, customer_id VARCHAR, order_date DATE);",
+                "CREATE TABLE order_details (order_id INT, product_id INT, quantity INT, unit_price DECIMAL);"
+            ]
+            for ddl in mock_tables:
+                vn.train_ddl(ddl)
+        
         except Exception as e:
-            logger.error(f"Error extracting schema: {str(e)}")
-            return jsonify({"error": f"Schema extraction error: {str(e)}"}), 500
+            logger.error(f"Error setting up mock schema: {str(e)}")
+            # Continue even if this fails - we can still generate mock SQL
         
         # Generate SQL from natural language
         try:
@@ -256,21 +225,11 @@ def process_query():
             logger.error(f"Error generating SQL: {str(e)}")
             return jsonify({"error": f"SQL generation error: {str(e)}"}), 500
         
-        # Execute the generated SQL or return mock data
+        # Generate mock data for the executed SQL
         try:
-            if PANDAS_AVAILABLE and SQLALCHEMY_AVAILABLE:
-                try:
-                    df = pd.read_sql(generated_sql, engine)
-                    result_data = df.to_dict(orient='records')
-                    columns = df.columns.tolist()
-                except Exception as e:
-                    logger.error(f"Error executing SQL: {str(e)}")
-                    # Provide mock results when SQL fails
-                    result_data, columns = get_mock_data_for_query(generated_sql)
-            else:
-                # Use mock data when pandas/sqlalchemy is not available
-                logger.info("Using mock data since pandas or sqlalchemy is not available")
-                result_data, columns = get_mock_data_for_query(generated_sql)
+            # Always use mock data since we're in demo mode
+            logger.info("Using mock data for demo purposes")
+            result_data, columns = get_mock_data_for_query(generated_sql)
             
             # Generate an explanation of the query
             try:
