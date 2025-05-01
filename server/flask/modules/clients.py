@@ -421,19 +421,24 @@ class OfficialVannaClient:
     
     def __init__(self, api_key=None, model=None):
         """Initialize with API key and model"""
-        from .config import OPENAI_API_KEY, VANNA_MODEL
+        from .config import OPENAI_API_KEY, VANNA_MODEL, VANNA_DEFAULT_AVAILABLE
         
         # Get OpenAI API key from environment to use with Vanna
         self.api_key = OPENAI_API_KEY 
         self.model = model or VANNA_MODEL
         self.vn = None
         
-        # Initialize the official client if available
-        if VANNA_AVAILABLE:
+        # Initialize the official client if VannaDefault is available
+        if VANNA_DEFAULT_AVAILABLE:
             try:
+                # Import VannaDefault directly
+                from vanna import VannaDefault
+                
                 # Initialize VannaDefault with model and OpenAI API key as specified
-                self.vn = vanna.VannaDefault(model=self.model, api_key=self.api_key)
-                logger.info(f"Initialized VannaDefault with model: {self.model} and OpenAI API key")
+                # Using the pattern: VannaDefault(model=os.environ['VANNA_MODEL'], api_key=os.environ['OPENAI_API_KEY'])
+                logger.info(f"Initializing VannaDefault with model={self.model}, api_key=OpenAI API key")
+                self.vn = VannaDefault(model=self.model, api_key=self.api_key)
+                logger.info(f"Successfully initialized VannaDefault with model: {self.model}")
                 
                 # Initialize with ChromaDB
                 if CHROMADB_AVAILABLE:
@@ -453,7 +458,7 @@ class OfficialVannaClient:
                 logger.error(f"Error initializing VannaDefault: {str(e)}")
                 self.vn = None
         else:
-            logger.warning("Official Vanna package not available")
+            logger.warning("VannaDefault not available in the Vanna package")
             self.vn = None
             
     def generate_questions(self):
@@ -1194,12 +1199,28 @@ class HTTPVannaClient:
         
 def initialize_vanna_client():
     """Initialize Vanna client based on available packages and configuration"""
-    from .config import API_KEY, VANNA_MODEL, LOCAL_MODE
+    from .config import API_KEY, VANNA_MODEL, LOCAL_MODE, OPENAI_API_KEY, VANNA_DEFAULT_AVAILABLE
     
     model = VANNA_MODEL  # Use model from config
-    api_key = API_KEY    # Use API key from config (None for local mode)
+    api_key = OPENAI_API_KEY  # Use OpenAI API key for VannaDefault
     
     logger.info(f"Using model: {model} with local mode: {LOCAL_MODE}")
+    
+    # First try to use the official VannaDefault implementation if available
+    # This is the preferred approach as explicitly requested
+    if VANNA_DEFAULT_AVAILABLE and not LOCAL_MODE:
+        try:
+            # Try VannaDefault with OpenAI API key and model
+            logger.info(f"Trying OfficialVannaClient with VannaDefault (model={model}, api_key=OpenAI API key)...")
+            client = OfficialVannaClient(api_key=api_key, model=model)
+            # Check if it was successfully initialized
+            if client.vn is not None:
+                logger.info("Successfully initialized OfficialVannaClient with VannaDefault")
+                return client
+            else:
+                logger.warning("OfficialVannaClient initialization failed (VannaDefault instance is None)")
+        except Exception as e:
+            logger.warning(f"OfficialVannaClient with VannaDefault failed: {str(e)}")
     
     # In local mode, prioritize ChromaDB for storage without API
     if LOCAL_MODE and CHROMADB_AVAILABLE:
@@ -1210,23 +1231,17 @@ def initialize_vanna_client():
         except Exception as e:
             logger.warning(f"HTTPVannaClient for local mode failed: {str(e)}")
     
-    # Try the other implementations as fallbacks
-    if VANNA_REMOTE_AVAILABLE and not LOCAL_MODE:
-        try:
-            # Try to use the official Vanna library implementation
-            logger.info("Trying OfficialVannaClient...")
-            return OfficialVannaClient(api_key=api_key, model=model)
-        except Exception as e:
-            logger.warning(f"Official Vanna client failed: {str(e)}")
-            
+    # Try HTTP implementation next
     if REQUESTS_AVAILABLE and not LOCAL_MODE:
         try:
             # Fall back to HTTP-based implementation for cloud API
-            logger.info("Trying HTTPVannaClient...")
-            return HTTPVannaClient(api_key=api_key, model=model)
+            logger.info("Trying HTTPVannaClient to communicate with Vanna API...")
+            http_client = HTTPVannaClient(api_key=API_KEY, model=model)
+            logger.info("Successfully initialized HTTPVannaClient")
+            return http_client
         except Exception as e:
             logger.warning(f"HTTP Vanna client failed: {str(e)}")
     
-    # Fall back to our custom RemoteAPIClient implementation
+    # Fall back to our custom RemoteAPIClient implementation as last resort
     logger.info("Using VannaRemoteClient as fallback...")
-    return VannaRemoteClient(api_key=api_key, model=model)
+    return VannaRemoteClient(api_key=API_KEY, model=model)

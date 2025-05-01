@@ -18,11 +18,26 @@ except ImportError:
 
 try:
     import vanna
-    import vanna.remote
+    try:
+        # Try to import VannaDefault directly
+        from vanna import VannaDefault
+        VANNA_DEFAULT_AVAILABLE = True
+        logger.info("VannaDefault is available, will use direct instantiation")
+    except (ImportError, AttributeError):
+        VANNA_DEFAULT_AVAILABLE = False
+        logger.warning("VannaDefault not available in vanna package")
+    
+    try:
+        import vanna.remote
+        VANNA_REMOTE_AVAILABLE = True
+    except ImportError:
+        VANNA_REMOTE_AVAILABLE = False
+        logger.warning("vanna.remote not available")
+    
     VANNA_AVAILABLE = True
-    VANNA_REMOTE_AVAILABLE = True
 except ImportError:
     VANNA_AVAILABLE = False
+    VANNA_DEFAULT_AVAILABLE = False
     VANNA_REMOTE_AVAILABLE = False
     logger.warning("Vanna module not available, using custom implementation")
 
