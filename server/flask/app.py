@@ -980,8 +980,87 @@ class HTTPVannaClient:
 VANNA_MODEL = os.environ.get('VANNA_MODEL', 'demo')
 logger.info(f"Using Vanna model: {VANNA_MODEL}")
 
+# Create cache instance for query results
+cache = MemoryCache()
+
+# Define the initialize_vanna function before use
+def initialize_vanna():
+    """Initialize Vanna client based on available packages and configuration"""
+    api_key = os.getenv("VANNA_API_KEY")
+    model = os.getenv("VANNA_MODEL", "default")  # Default model
+    
+    if not api_key:
+        logger.warning("VANNA_API_KEY not found in environment, using demo key")
+        api_key = "demo"  # Use demo key for development
+    
+    logger.info(f"Using model: {model}")
+    
+    # Choose the best implementation available
+    if VANNA_REMOTE_AVAILABLE:
+        try:
+            # Try to use the official Vanna library implementation
+            logger.info("Trying OfficialVannaClient...")
+            return OfficialVannaClient(api_key=api_key, model=model)
+        except Exception as e:
+            logger.warning(f"Official Vanna client failed: {str(e)}")
+            
+    if REQUESTS_AVAILABLE:
+        try:
+            # Fall back to HTTP-based implementation
+            logger.info("Trying HTTPVannaClient...")
+            return HTTPVannaClient(api_key=api_key, model=model)
+        except Exception as e:
+            logger.warning(f"HTTP Vanna client failed: {str(e)}")
+    
+    # Fall back to our custom RemoteAPIClient implementation
+    logger.info("Using VannaRemoteClient as fallback...")
+    return VannaRemoteClient(api_key=api_key, model=model)
+
+# Initialize the Vanna Client
+vanna_client = initialize_vanna()
+logger.info(f"Using Vanna client: {vanna_client.__class__.__name__}")
+
 # Create a dictionary to store database connections
 db_engines = {}
+
+# This is a duplicate - already defined above
+
+# Function to get a Vanna client instance
+def get_vanna_client():
+    """Return a Vanna client with proper initialization"""
+    return vanna_client
+
+# Function to train model with sample schema
+def train_with_sample_schema(vn):
+    """Train the model with sample schema information"""
+    # Sample schema for the Northwind database
+    mock_tables = [
+        "CREATE TABLE customers (customer_id VARCHAR PRIMARY KEY, company_name VARCHAR, contact_name VARCHAR, country VARCHAR);",
+        "CREATE TABLE products (product_id INT PRIMARY KEY, product_name VARCHAR, unit_price DECIMAL, units_in_stock INT, units_on_order INT, discontinued BOOLEAN, category_id INT);",
+        "CREATE TABLE orders (order_id INT PRIMARY KEY, customer_id VARCHAR, order_date DATE);",
+        "CREATE TABLE order_details (order_id INT, product_id INT, quantity INT, unit_price DECIMAL);",
+        "CREATE TABLE categories (category_id INT PRIMARY KEY, category_name VARCHAR, description VARCHAR);"
+    ]
+    
+    # Try to train with these tables
+    try:
+        if hasattr(vn, "chroma_client") and vn.chroma_client:
+            logger.info("Using ChromaDB for schema storage")
+            for ddl in mock_tables:
+                try:
+                    # This will only store locally in ChromaDB
+                    if hasattr(vn, "ddl_collection"):
+                        import hashlib
+                        ddl_id = hashlib.md5(ddl.encode()).hexdigest()
+                        vn.ddl_collection.add(documents=[ddl], ids=[ddl_id])
+                except Exception as e:
+                    logger.error(f"Error storing DDL in ChromaDB: {str(e)}")
+        elif hasattr(vn, "train_ddl"):
+            # For API-based implementations
+            for ddl in mock_tables:
+                vn.train_ddl(ddl)
+    except Exception as e:
+        logger.error(f"Error training with sample schema: {str(e)}")
 
 # Function to generate mock data based on the query
 def get_mock_data_for_query(sql_query):
@@ -1065,49 +1144,35 @@ def health_check():
 def get_example_questions():
     """Return example questions for the UI"""
     try:
-        # Always try to use the real Vanna API first
-        try:
-            # Get API key from environment
-            api_key = os.environ.get("VANNA_API_KEY")
-            if api_key:
-                # Create a new instance of Vanna with the API key
-                vn = vanna.Vanna(api_key=api_key)
-                logger.info("Initializing Vanna with API key")
-            else:
-                # Create a new instance of Vanna
-                vn = vanna.Vanna()
-                # Use demo mode which doesn't require an API key
-                logger.info("Initializing Vanna in demo mode (no API key found)")
-                vn.init_vanna_model()
+        # Use our singleton vanna client instance
+        client = get_vanna_client()
+        
+        # Check if the client has the method
+        if hasattr(client, "get_example_questions"):
+            examples = client.get_example_questions()
+            logger.info("Successfully fetched example questions")
+        else:
+            # Fallback to default examples
+            examples = [
+                "Show me the top 5 products by revenue",
+                "How many orders do we have by country?",
+                "What is our monthly sales trend for 2023?",
+                "Which products are running low on inventory?",
+                "How many products do we have in each category?"
+            ]
+            logger.warning("Using default example questions")
             
-            example_questions = vn.get_example_questions()
-            logger.info("Successfully fetched example questions from Vanna API")
-        except Exception as e:
-            logger.error(f"Error with Vanna API: {str(e)}")
-            # Try HTTP implementation if we have an API key
-            api_key = os.environ.get("VANNA_API_KEY")
-            if api_key and REQUESTS_AVAILABLE:
-                try:
-                    logger.info("Trying HTTPVanna implementation with API key")
-                    vn = HTTPVanna(api_key=api_key)
-                    example_questions = vn.get_example_questions()
-                    logger.info("Successfully fetched example questions using HTTP implementation")
-                except Exception as e:
-                    logger.error(f"Error with HTTPVanna: {str(e)}")
-                    # Fall back to mock implementation if all else fails
-                    vn = MockVanna(api_key=api_key)
-                    example_questions = vn.get_example_questions()
-                    logger.warning("Using mock example questions as last resort")
-            else:
-                # Fall back to mock implementation
-                vn = MockVanna(api_key=api_key)
-                example_questions = vn.get_example_questions()
-                logger.warning("Using mock example questions")
-            
-        return jsonify({"examples": example_questions})
+        return jsonify({"examples": examples})
     except Exception as e:
         logger.error(f"Error fetching example questions: {str(e)}")
-        return jsonify({"error": f"Error fetching example questions: {str(e)}"}), 500
+        # Fallback to default examples on error
+        return jsonify({"examples": [
+            "Show me the top 5 products by revenue",
+            "How many orders do we have by country?",
+            "What is our monthly sales trend for 2023?",
+            "Which products are running low on inventory?",
+            "How many products do we have in each category?"
+        ]})
         
 @app.route('/api/training-data', methods=['GET'])
 def get_training_data():
@@ -1312,6 +1377,8 @@ def process_query():
         logger.error(f"Unexpected error: {str(e)}")
         traceback_str = traceback.format_exc()
         return jsonify({"error": f"Server error: {str(e)}", "traceback": traceback_str}), 500
+
+# This is handled in the initialization code above
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8000, debug=True)
