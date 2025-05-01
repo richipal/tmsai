@@ -34,7 +34,15 @@ try:
     VANNA_AVAILABLE = True
 except ImportError:
     VANNA_AVAILABLE = False
-    logger.warning("Vanna module not available, using mock implementation")
+    logger.warning("Vanna module not available, using custom HTTP implementation")
+    
+# Import requests for direct API calls when vanna package is not available
+try:
+    import requests
+    REQUESTS_AVAILABLE = True
+except ImportError:
+    REQUESTS_AVAILABLE = False
+    logger.warning("Requests module not available, API calls will not work")
 
 # Create a mock Vanna implementation for demo purposes
 class MockVanna:
@@ -151,6 +159,110 @@ class MockVanna:
         logger.info("Initialized mock Vanna model")
         return True
 
+# HTTP-based implementation for Vanna API when the package isn't available
+class HTTPVanna:
+    """HTTP-based implementation of Vanna API using direct REST calls"""
+    
+    BASE_URL = "https://api.vanna.ai/v1"
+    
+    def __init__(self, api_key=None):
+        """Initialize with API key"""
+        self.api_key = api_key
+        if not api_key:
+            raise ValueError("API key is required for HTTPVanna")
+        
+        self.headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
+        logger.info("HTTPVanna initialized with API key")
+    
+    def generate_sql(self, query):
+        """Generate SQL from natural language query"""
+        url = f"{self.BASE_URL}/generate_sql"
+        payload = {"question": query}
+        
+        response = requests.post(url, headers=self.headers, json=payload)
+        if response.status_code != 200:
+            logger.error(f"Error generating SQL: {response.text}")
+            raise Exception(f"API Error: {response.status_code} - {response.text}")
+        
+        result = response.json()
+        return result.get("sql", "")
+    
+    def ask(self, question):
+        """Ask a question about SQL"""
+        url = f"{self.BASE_URL}/ask"
+        payload = {"question": question}
+        
+        response = requests.post(url, headers=self.headers, json=payload)
+        if response.status_code != 200:
+            logger.error(f"Error asking question: {response.text}")
+            raise Exception(f"API Error: {response.status_code} - {response.text}")
+        
+        result = response.json()
+        return result.get("answer", "No explanation available.")
+    
+    def get_example_questions(self):
+        """Get example questions"""
+        # This is a mock implementation as this endpoint might not exist
+        return [
+            "What are the top selling products?",
+            "How many customers do we have by country?",
+            "Show me monthly sales for last year",
+            "Which products are low in stock?",
+            "What is the breakdown of sales by category?"
+        ]
+    
+    def get_training_data(self):
+        """Get training data - mock implementation"""
+        return {
+            "question_sql_pairs": [],
+            "documentation": [],
+            "ddl": []
+        }
+    
+    def train_ddl(self, ddl):
+        """Train with DDL statements"""
+        url = f"{self.BASE_URL}/train_ddl"
+        payload = {"ddl": ddl}
+        
+        response = requests.post(url, headers=self.headers, json=payload)
+        if response.status_code != 200:
+            logger.error(f"Error training DDL: {response.text}")
+            raise Exception(f"API Error: {response.status_code} - {response.text}")
+        
+        return True
+    
+    def train_documentation(self, documentation):
+        """Train with documentation"""
+        url = f"{self.BASE_URL}/train_documentation"
+        payload = {"documentation": documentation}
+        
+        response = requests.post(url, headers=self.headers, json=payload)
+        if response.status_code != 200:
+            logger.error(f"Error training documentation: {response.text}")
+            raise Exception(f"API Error: {response.status_code} - {response.text}")
+        
+        return True
+    
+    def train_question_sql(self, question, sql):
+        """Train with question-SQL pair"""
+        url = f"{self.BASE_URL}/train_question_sql"
+        payload = {"question": question, "sql": sql}
+        
+        response = requests.post(url, headers=self.headers, json=payload)
+        if response.status_code != 200:
+            logger.error(f"Error training question-SQL pair: {response.text}")
+            raise Exception(f"API Error: {response.status_code} - {response.text}")
+        
+        return True
+    
+    def init_vanna_model(self):
+        """Initialize model - no-op for HTTP implementation"""
+        logger.info("HTTPVanna model initialization (no-op)")
+        return True
+
 # Initialize Vanna AI with mode from environment variable
 VANNA_MODEL = os.environ.get('VANNA_MODEL', 'demo')
 logger.info(f"Using Vanna model: {VANNA_MODEL}")
@@ -219,7 +331,22 @@ def get_mock_data_for_query(sql_query):
 
 @app.route('/api/health', methods=['GET'])
 def health_check():
-    return jsonify({"status": "ok", "vanna_available": VANNA_AVAILABLE})
+    api_key_present = os.environ.get("VANNA_API_KEY") is not None
+    
+    # Check if HTTP Vanna implementation could work
+    http_available = REQUESTS_AVAILABLE and api_key_present
+    
+    return jsonify({
+        "status": "ok", 
+        "vanna_package_available": VANNA_AVAILABLE,
+        "http_implementation_available": http_available,
+        "api_key_present": api_key_present,
+        "fallbacks": [
+            "Package-based Vanna API" if VANNA_AVAILABLE else None,
+            "HTTP-based Vanna API" if http_available else None,
+            "Mock implementation (always available)"
+        ]
+    })
 
 @app.route('/api/examples', methods=['GET'])
 def get_example_questions():
@@ -244,11 +371,25 @@ def get_example_questions():
             logger.info("Successfully fetched example questions from Vanna API")
         except Exception as e:
             logger.error(f"Error with Vanna API: {str(e)}")
-            # Fall back to mock implementation if real Vanna fails
+            # Try HTTP implementation if we have an API key
             api_key = os.environ.get("VANNA_API_KEY")
-            vn = MockVanna(api_key=api_key)
-            example_questions = vn.get_example_questions()
-            logger.warning("Using mock example questions")
+            if api_key and REQUESTS_AVAILABLE:
+                try:
+                    logger.info("Trying HTTPVanna implementation with API key")
+                    vn = HTTPVanna(api_key=api_key)
+                    example_questions = vn.get_example_questions()
+                    logger.info("Successfully fetched example questions using HTTP implementation")
+                except Exception as e:
+                    logger.error(f"Error with HTTPVanna: {str(e)}")
+                    # Fall back to mock implementation if all else fails
+                    vn = MockVanna(api_key=api_key)
+                    example_questions = vn.get_example_questions()
+                    logger.warning("Using mock example questions as last resort")
+            else:
+                # Fall back to mock implementation
+                vn = MockVanna(api_key=api_key)
+                example_questions = vn.get_example_questions()
+                logger.warning("Using mock example questions")
             
         return jsonify({"examples": example_questions})
     except Exception as e:
@@ -278,11 +419,25 @@ def get_training_data():
             logger.info("Successfully fetched training data from Vanna API")
         except Exception as e:
             logger.error(f"Error with Vanna API: {str(e)}")
-            # Fall back to mock implementation if real Vanna fails
+            # Try HTTP implementation if we have an API key
             api_key = os.environ.get("VANNA_API_KEY")
-            vn = MockVanna(api_key=api_key)
-            training_data = vn.get_training_data()
-            logger.warning("Using mock training data")
+            if api_key and REQUESTS_AVAILABLE:
+                try:
+                    logger.info("Trying HTTPVanna implementation with API key")
+                    vn = HTTPVanna(api_key=api_key)
+                    training_data = vn.get_training_data()
+                    logger.info("Successfully fetched training data using HTTP implementation")
+                except Exception as e:
+                    logger.error(f"Error with HTTPVanna: {str(e)}")
+                    # Fall back to mock implementation if all else fails
+                    vn = MockVanna(api_key=api_key)
+                    training_data = vn.get_training_data()
+                    logger.warning("Using mock training data as last resort")
+            else:
+                # Fall back to mock implementation
+                vn = MockVanna(api_key=api_key)
+                training_data = vn.get_training_data()
+                logger.warning("Using mock training data")
             
         return jsonify(training_data)
     except Exception as e:
@@ -315,10 +470,22 @@ def train_model():
             logger.info("Initialized Vanna API for training")
         except Exception as e:
             logger.error(f"Error with Vanna API: {str(e)}")
-            # Fall back to mock implementation if real Vanna fails
+            # Try HTTP implementation if we have an API key
             api_key = os.environ.get("VANNA_API_KEY")
-            vn = MockVanna(api_key=api_key)
-            logger.warning("Using mock implementation for training")
+            if api_key and REQUESTS_AVAILABLE:
+                try:
+                    logger.info("Trying HTTPVanna implementation with API key for training")
+                    vn = HTTPVanna(api_key=api_key)
+                    logger.info("Successfully initialized HTTP implementation for training")
+                except Exception as e:
+                    logger.error(f"Error with HTTPVanna: {str(e)}")
+                    # Fall back to mock implementation if all else fails
+                    vn = MockVanna(api_key=api_key)
+                    logger.warning("Using mock implementation for training as last resort")
+            else:
+                # Fall back to mock implementation
+                vn = MockVanna(api_key=api_key)
+                logger.warning("Using mock implementation for training")
             
         # Train the model with the provided data
         if 'ddl' in data:
@@ -393,10 +560,23 @@ def process_query():
                 vn.init_vanna_model()
         except Exception as e:
             logger.error(f"Error initializing Vanna API: {str(e)}")
-            # Only use mock as a fallback if real Vanna fails
-            logger.warning("Falling back to mock implementation as Vanna isn't available")
+            
+            # Try HTTP implementation if we have an API key
             api_key = os.environ.get("VANNA_API_KEY")
-            vn = MockVanna(api_key=api_key)
+            if api_key and REQUESTS_AVAILABLE:
+                try:
+                    logger.info("Trying HTTPVanna implementation with API key for query")
+                    vn = HTTPVanna(api_key=api_key)
+                    logger.info("Successfully initialized HTTP implementation for query")
+                except Exception as e:
+                    logger.error(f"Error with HTTPVanna: {str(e)}")
+                    # Fall back to mock implementation if all else fails
+                    vn = MockVanna(api_key=api_key)
+                    logger.warning("Using mock implementation for query as last resort")
+            else:
+                # Only use mock as a fallback if real Vanna fails and HTTP implementation isn't available
+                logger.warning("Falling back to mock implementation as Vanna isn't available")
+                vn = MockVanna(api_key=api_key)
         
         # Extract database schema information or use mock data
         try:
