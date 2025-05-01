@@ -1,0 +1,76 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 98%;
+    --foreground: 222.2 84% 4.9%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+
+    --primary: 214 100% 50%;
+    --primary-foreground: 210 40% 98%;
+
+    --secondary: 161 94% 39%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+
+    --accent: 238 94% 67%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 221.2 83.2% 53.3%;
+
+    --radius: 0.5rem;
+    
+    --chart-1: 214 100% 50%;
+    --chart-2: 161 94% 39%;
+    --chart-3: 238 94% 67%;
+    --chart-4: 335 78% 60%;
+    --chart-5: 46 97% 65%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply font-sans antialiased bg-background text-foreground;
+  }
+  
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-gray-100 rounded-sm;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-gray-300 rounded-sm;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-gray-400;
+  }
+  
+  /* Syntax highlighting for SQL code */
+  .sql-keyword { color: #7c3aed; font-weight: 500; }
+  .sql-function { color: #2563eb; }
+  .sql-table { color: #059669; }
+  .sql-column { color: #0369a1; }
+  .sql-string { color: #b91c1c; }
+  .sql-number { color: #0891b2; }
+  .sql-operator { color: #4b5563; }
+  .sql-comment { color: #9ca3af; font-style: italic; }
+}
