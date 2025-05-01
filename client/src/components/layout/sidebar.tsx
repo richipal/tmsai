@@ -1,6 +1,6 @@
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
-import { LayoutDashboard, History, Bookmark, Database, Settings } from "lucide-react";
+import { LayoutDashboard, History, Bookmark, Database, Settings, Brain } from "lucide-react";
 import { useQueryHistory } from "@/hooks/use-query";
 
 export default function Sidebar() {
@@ -79,6 +79,23 @@ export default function Sidebar() {
                 isActive("/database-schema") ? "text-primary-500" : "text-gray-400"
               )} />
               <span className="truncate">Database Schema</span>
+            </a>
+          </Link>
+
+          <Link href="/training-data">
+            <a
+              className={cn(
+                "flex items-center px-3 py-2 text-sm font-medium rounded-md",
+                isActive("/training-data")
+                  ? "bg-primary-50 text-primary-700"
+                  : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+              )}
+            >
+              <Brain className={cn(
+                "mr-3 h-5 w-5",
+                isActive("/training-data") ? "text-primary-500" : "text-gray-400"
+              )} />
+              <span className="truncate">Training Data</span>
             </a>
           </Link>
 

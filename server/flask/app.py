@@ -43,29 +43,86 @@ class MockVanna:
             "revenue": "SELECT product_name, SUM(unit_price * quantity) as revenue FROM products JOIN order_details ON products.product_id = order_details.product_id GROUP BY product_name ORDER BY revenue DESC LIMIT 5",
             "orders": "SELECT country, COUNT(*) as order_count FROM customers JOIN orders ON customers.customer_id = orders.customer_id GROUP BY country ORDER BY order_count DESC",
             "sales": "SELECT EXTRACT(MONTH FROM order_date) as month, SUM(unit_price * quantity) as sales FROM orders JOIN order_details ON orders.order_id = order_details.order_id WHERE EXTRACT(YEAR FROM order_date) = 2023 GROUP BY month ORDER BY month",
+            "inventory": "SELECT product_name, units_in_stock, units_on_order FROM products WHERE discontinued = 0 ORDER BY units_in_stock ASC LIMIT 10",
+            "categories": "SELECT categories.category_name, COUNT(products.product_id) as product_count FROM categories JOIN products ON categories.category_id = products.category_id GROUP BY categories.category_name ORDER BY product_count DESC",
             "default": "SELECT * FROM customers LIMIT 10"
         }
         self.explanations = {
             "revenue": "This query calculates the total revenue for each product by multiplying the unit price by quantity sold across all orders, then returns the top 5 products by revenue.",
             "orders": "This query counts the number of orders placed by customers in each country, showing which countries have the highest order volumes.",
             "sales": "This query analyzes the monthly sales trend for 2023 by calculating the total sales amount for each month of the year.",
+            "inventory": "This query retrieves products that are still active (not discontinued) with their current inventory levels, ordered by the smallest inventory first to identify potential stock issues.",
+            "categories": "This query analyzes the distribution of products across different categories, showing which categories have the most products.",
             "default": "This query returns a sample of up to 10 customer records from the database to provide a quick overview of customer data."
+        }
+        
+        # Example questions for UI
+        self.example_questions = [
+            "Show me the top 5 products by revenue",
+            "How many orders do we have by country?",
+            "What is our monthly sales trend for 2023?",
+            "Which products are running low on inventory?",
+            "How many products do we have in each category?"
+        ]
+        
+        # Training data for the system
+        self.training_data = {
+            "question_sql_pairs": [
+                {"question": "Show me the top 5 products by revenue", 
+                 "sql": "SELECT product_name, SUM(unit_price * quantity) as revenue FROM products JOIN order_details ON products.product_id = order_details.product_id GROUP BY product_name ORDER BY revenue DESC LIMIT 5"},
+                {"question": "How many orders do we have by country?", 
+                 "sql": "SELECT country, COUNT(*) as order_count FROM customers JOIN orders ON customers.customer_id = orders.customer_id GROUP BY country ORDER BY order_count DESC"},
+                {"question": "What is our monthly sales trend for 2023?", 
+                 "sql": "SELECT EXTRACT(MONTH FROM order_date) as month, SUM(unit_price * quantity) as sales FROM orders JOIN order_details ON orders.order_id = order_details.order_id WHERE EXTRACT(YEAR FROM order_date) = 2023 GROUP BY month ORDER BY month"},
+                {"question": "Which products are running low on inventory?", 
+                 "sql": "SELECT product_name, units_in_stock, units_on_order FROM products WHERE discontinued = 0 ORDER BY units_in_stock ASC LIMIT 10"},
+                {"question": "How many products do we have in each category?", 
+                 "sql": "SELECT categories.category_name, COUNT(products.product_id) as product_count FROM categories JOIN products ON categories.category_id = products.category_id GROUP BY categories.category_name ORDER BY product_count DESC"}
+            ],
+            "documentation": [
+                {"table": "customers", "description": "Contains all customer data including company information, contact details, and location."},
+                {"table": "products", "description": "Product catalog with pricing, stock information, and category relationships."},
+                {"table": "orders", "description": "Customer orders with dates, shipping details, and relationships to customers."},
+                {"table": "order_details", "description": "Line items for each order, with product quantities and pricing information."},
+                {"table": "categories", "description": "Product categories with names and descriptions."}
+            ],
+            "ddl": [
+                "CREATE TABLE customers (customer_id VARCHAR PRIMARY KEY, company_name VARCHAR, contact_name VARCHAR, country VARCHAR);",
+                "CREATE TABLE products (product_id INT PRIMARY KEY, product_name VARCHAR, unit_price DECIMAL, units_in_stock INT, units_on_order INT, discontinued BOOLEAN, category_id INT);",
+                "CREATE TABLE orders (order_id INT PRIMARY KEY, customer_id VARCHAR, order_date DATE);",
+                "CREATE TABLE order_details (order_id INT, product_id INT, quantity INT, unit_price DECIMAL);",
+                "CREATE TABLE categories (category_id INT PRIMARY KEY, category_name VARCHAR, description VARCHAR);"
+            ]
         }
         
     def train_ddl(self, ddl):
         # Just a mock implementation, doesn't actually do anything
         logger.info(f"Mock training with DDL: {ddl[:50]}...")
         return True
+    
+    def train_documentation(self, documentation):
+        # Mock implementation for documentation training
+        logger.info(f"Mock training with documentation: {documentation[:50]}...")
+        return True
+    
+    def train_question_sql(self, question, sql):
+        # Mock implementation for question-SQL pair training
+        logger.info(f"Mock training with question-SQL pair: {question} -> {sql[:30]}...")
+        return True
         
     def generate_sql(self, query):
         # Determine which template to use based on keywords in the query
         query = query.lower()
-        if "revenue" in query or "top" in query:
+        if "revenue" in query or "top" in query and "product" in query:
             return self.sql_templates["revenue"]
         elif "countr" in query or "order" in query:
             return self.sql_templates["orders"]
         elif "sales" in query or "trend" in query or "month" in query:
             return self.sql_templates["sales"]
+        elif "inventory" in query or "stock" in query or "low" in query:
+            return self.sql_templates["inventory"]
+        elif "categor" in query:
+            return self.sql_templates["categories"]
         else:
             return self.sql_templates["default"]
             
@@ -75,6 +132,14 @@ class MockVanna:
             if key in question.lower():
                 return explanation
         return self.explanations["default"]
+    
+    def get_example_questions(self):
+        # Return example questions for the UI
+        return self.example_questions
+    
+    def get_training_data(self):
+        # Return training data
+        return self.training_data
     
     def init_vanna_model(self):
         # Mock initialization
@@ -150,6 +215,76 @@ def get_mock_data_for_query(sql_query):
 @app.route('/api/health', methods=['GET'])
 def health_check():
     return jsonify({"status": "ok", "vanna_available": VANNA_AVAILABLE})
+
+@app.route('/api/examples', methods=['GET'])
+def get_example_questions():
+    """Return example questions for the UI"""
+    try:
+        # Initialize Vanna AI or use mock implementation
+        if VANNA_AVAILABLE:
+            vn = vanna.Vanna()
+            if VANNA_MODEL == 'demo':
+                vn.init_vanna_model()
+            example_questions = vn.get_example_questions()
+        else:
+            vn = MockVanna()
+            example_questions = vn.get_example_questions()
+            
+        return jsonify({"examples": example_questions})
+    except Exception as e:
+        logger.error(f"Error fetching example questions: {str(e)}")
+        return jsonify({"error": f"Error fetching example questions: {str(e)}"}), 500
+        
+@app.route('/api/training-data', methods=['GET'])
+def get_training_data():
+    """Return training data (question-SQL pairs, documentation, DDL)"""
+    try:
+        # Initialize Vanna AI or use mock implementation
+        if VANNA_AVAILABLE:
+            vn = vanna.Vanna()
+            if VANNA_MODEL == 'demo':
+                vn.init_vanna_model()
+            training_data = vn.get_training_data()
+        else:
+            vn = MockVanna()
+            training_data = vn.get_training_data()
+            
+        return jsonify(training_data)
+    except Exception as e:
+        logger.error(f"Error fetching training data: {str(e)}")
+        return jsonify({"error": f"Error fetching training data: {str(e)}"}), 500
+
+@app.route('/api/train', methods=['POST'])
+def train_model():
+    """Add training data to the model"""
+    try:
+        # Get the training data from the request
+        data = request.json
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
+            
+        # Initialize Vanna AI or use mock implementation
+        if VANNA_AVAILABLE:
+            vn = vanna.Vanna()
+            if VANNA_MODEL == 'demo':
+                vn.init_vanna_model()
+        else:
+            vn = MockVanna()
+            
+        # Train the model with the provided data
+        if 'ddl' in data:
+            vn.train_ddl(data['ddl'])
+            
+        if 'documentation' in data:
+            vn.train_documentation(data['documentation'])
+            
+        if 'question' in data and 'sql' in data:
+            vn.train_question_sql(data['question'], data['sql'])
+            
+        return jsonify({"status": "ok", "message": "Training data added successfully"})
+    except Exception as e:
+        logger.error(f"Error adding training data: {str(e)}")
+        return jsonify({"error": f"Error adding training data: {str(e)}"}), 500
 
 @app.route('/api/query', methods=['POST'])
 def process_query():

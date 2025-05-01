@@ -21,6 +21,26 @@ export type QueryResultData = {
   execution_time: number;
 };
 
+export type ExampleQuestionsData = {
+  examples: string[];
+};
+
+export type QuestionSqlPair = {
+  question: string;
+  sql: string;
+};
+
+export type TableDocumentation = {
+  table: string;
+  description: string;
+};
+
+export type TrainingData = {
+  question_sql_pairs: QuestionSqlPair[];
+  documentation: TableDocumentation[];
+  ddl: string[];
+};
+
 export type QueryHistoryItem = {
   id: number;
   naturalLanguageQuery: string;
@@ -123,5 +143,43 @@ export async function getQueryResult(queryId: number): Promise<{query: QueryHist
     throw new Error(`Failed to fetch query result: ${response.statusText}`);
   }
   
+  return await response.json();
+}
+
+/**
+ * Get example questions for the UI
+ */
+export async function getExampleQuestions(): Promise<ExampleQuestionsData> {
+  const response = await fetch('/api/examples', {
+    credentials: 'include',
+  });
+  
+  if (!response.ok) {
+    throw new Error(`Failed to fetch example questions: ${response.statusText}`);
+  }
+  
+  return await response.json();
+}
+
+/**
+ * Get training data (question-SQL pairs, documentation, DDL)
+ */
+export async function getTrainingData(): Promise<TrainingData> {
+  const response = await fetch('/api/training-data', {
+    credentials: 'include',
+  });
+  
+  if (!response.ok) {
+    throw new Error(`Failed to fetch training data: ${response.statusText}`);
+  }
+  
+  return await response.json();
+}
+
+/**
+ * Add training data to the model
+ */
+export async function trainModel(data: { ddl?: string, documentation?: string, question?: string, sql?: string }): Promise<{status: string, message: string}> {
+  const response = await apiRequest('POST', '/api/train', data);
   return await response.json();
 }

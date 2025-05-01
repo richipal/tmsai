@@ -8,6 +8,7 @@ import QueryHistory from "@/pages/query-history";
 import SavedQueries from "@/pages/saved-queries";
 import DatabaseSchema from "@/pages/database-schema";
 import Settings from "@/pages/settings";
+import TrainingData from "@/pages/training-data";
 import { useState, useEffect } from "react";
 
 // Query Detail Page component - Simplified version for now
@@ -33,6 +34,7 @@ function Router() {
       <Route path="/query-history/:id" component={QueryDetail} />
       <Route path="/saved-queries" component={SavedQueries} />
       <Route path="/database-schema" component={DatabaseSchema} />
+      <Route path="/training-data" component={TrainingData} />
       <Route path="/settings" component={Settings} />
       {/* Fallback to 404 */}
       <Route component={NotFound} />

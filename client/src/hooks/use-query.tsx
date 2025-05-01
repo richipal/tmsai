@@ -1,6 +1,19 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { executeQuery, getQueryHistory, getSavedQueries, saveQuery, unsaveQuery, QueryResultData, QueryHistoryItem } from "@/lib/flask-service";
+import { 
+  executeQuery, 
+  getQueryHistory, 
+  getSavedQueries, 
+  saveQuery, 
+  unsaveQuery, 
+  getExampleQuestions,
+  getTrainingData,
+  trainModel,
+  QueryResultData, 
+  QueryHistoryItem,
+  ExampleQuestionsData,
+  TrainingData
+} from "@/lib/flask-service";
 
 export const useNaturalLanguageQuery = (databaseConnectionId: number) => {
   const [queryInput, setQueryInput] = useState<string>("");
@@ -89,5 +102,51 @@ export const useQueryActions = () => {
     unsaveQuery: unsaveQueryMutation.mutate,
     isSaving: saveQueryMutation.isPending,
     isUnsaving: unsaveQueryMutation.isPending
+  };
+};
+
+export const useExampleQuestions = () => {
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['/api/examples'],
+    queryFn: getExampleQuestions,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+  
+  return {
+    examples: data?.examples || [],
+    isLoading,
+    error
+  };
+};
+
+export const useTrainingData = () => {
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['/api/training-data'],
+    queryFn: getTrainingData,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+  
+  return {
+    trainingData: data,
+    isLoading,
+    error
+  };
+};
+
+export const useTrainModel = () => {
+  const queryClient = useQueryClient();
+  
+  const trainModelMutation = useMutation({
+    mutationFn: trainModel,
+    onSuccess: () => {
+      // Invalidate training data query to refresh
+      queryClient.invalidateQueries({ queryKey: ['/api/training-data'] });
+    }
+  });
+  
+  return {
+    trainModel: trainModelMutation.mutate,
+    isTraining: trainModelMutation.isPending,
+    error: trainModelMutation.error
   };
 };

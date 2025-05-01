@@ -8,15 +8,9 @@ import DataVisualization from "@/components/results/visualization";
 import DataTable from "@/components/results/data-table";
 import QueryExplanation from "@/components/results/query-explanation";
 import { Card, CardContent } from "@/components/ui/card";
-import { useNaturalLanguageQuery } from "@/hooks/use-query";
+import { useNaturalLanguageQuery, useExampleQuestions } from "@/hooks/use-query";
 import { useQuery } from "@tanstack/react-query";
 import { getDatabaseConnections } from "@/lib/flask-service";
-
-const EXAMPLE_QUERIES = [
-  "Show me the top 5 products by revenue",
-  "Customer orders by country",
-  "Monthly sales trend for 2023"
-];
 
 export default function Dashboard() {
   // Get database connections
@@ -24,6 +18,9 @@ export default function Dashboard() {
     queryKey: ['/api/connections'],
     queryFn: getDatabaseConnections,
   });
+  
+  // Fetch example questions
+  const { examples, isLoading: isLoadingExamples } = useExampleQuestions();
   
   // Use the first connection by default or 1 if we don't have connections yet
   const [selectedConnectionId, setSelectedConnectionId] = useState<number>(1);
@@ -87,7 +84,7 @@ export default function Dashboard() {
                   />
                   
                   <ExampleQueries 
-                    examples={EXAMPLE_QUERIES}
+                    examples={examples}
                     onSelect={handleExampleQuerySelect}
                   />
                 </CardContent>
