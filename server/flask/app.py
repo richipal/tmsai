@@ -220,15 +220,29 @@ def health_check():
 def get_example_questions():
     """Return example questions for the UI"""
     try:
-        # Initialize Vanna AI or use mock implementation
-        if VANNA_AVAILABLE:
-            vn = vanna.Vanna()
-            if VANNA_MODEL == 'demo':
+        # Always try to use the real Vanna API first
+        try:
+            # Get API key from environment
+            api_key = os.environ.get("VANNA_API_KEY")
+            if api_key:
+                # Create a new instance of Vanna with the API key
+                vn = vanna.Vanna(api_key=api_key)
+                logger.info("Initializing Vanna with API key")
+            else:
+                # Create a new instance of Vanna
+                vn = vanna.Vanna()
+                # Use demo mode which doesn't require an API key
+                logger.info("Initializing Vanna in demo mode (no API key found)")
                 vn.init_vanna_model()
+            
             example_questions = vn.get_example_questions()
-        else:
+            logger.info("Successfully fetched example questions from Vanna API")
+        except Exception as e:
+            logger.error(f"Error with Vanna API: {str(e)}")
+            # Fall back to mock implementation if real Vanna fails
             vn = MockVanna()
             example_questions = vn.get_example_questions()
+            logger.warning("Using mock example questions")
             
         return jsonify({"examples": example_questions})
     except Exception as e:
@@ -239,15 +253,20 @@ def get_example_questions():
 def get_training_data():
     """Return training data (question-SQL pairs, documentation, DDL)"""
     try:
-        # Initialize Vanna AI or use mock implementation
-        if VANNA_AVAILABLE:
+        # Always try to use the real Vanna API first
+        try:
+            # Create a new instance of Vanna
             vn = vanna.Vanna()
-            if VANNA_MODEL == 'demo':
-                vn.init_vanna_model()
+            # Use demo mode which doesn't require an API key
+            vn.init_vanna_model()
             training_data = vn.get_training_data()
-        else:
+            logger.info("Successfully fetched training data from Vanna API")
+        except Exception as e:
+            logger.error(f"Error with Vanna API: {str(e)}")
+            # Fall back to mock implementation if real Vanna fails
             vn = MockVanna()
             training_data = vn.get_training_data()
+            logger.warning("Using mock training data")
             
         return jsonify(training_data)
     except Exception as e:
@@ -263,23 +282,31 @@ def train_model():
         if not data:
             return jsonify({"error": "No data provided"}), 400
             
-        # Initialize Vanna AI or use mock implementation
-        if VANNA_AVAILABLE:
+        # Always try to use the real Vanna API first
+        try:
+            # Create a new instance of Vanna
             vn = vanna.Vanna()
-            if VANNA_MODEL == 'demo':
-                vn.init_vanna_model()
-        else:
+            # Use demo mode which doesn't require an API key
+            vn.init_vanna_model()
+            logger.info("Initialized Vanna API for training")
+        except Exception as e:
+            logger.error(f"Error with Vanna API: {str(e)}")
+            # Fall back to mock implementation if real Vanna fails
             vn = MockVanna()
+            logger.warning("Using mock implementation for training")
             
         # Train the model with the provided data
         if 'ddl' in data:
             vn.train_ddl(data['ddl'])
+            logger.info(f"Trained model with DDL: {data['ddl'][:50]}...")
             
         if 'documentation' in data:
             vn.train_documentation(data['documentation'])
+            logger.info(f"Trained model with documentation for: {data['documentation'][:50]}...")
             
         if 'question' in data and 'sql' in data:
             vn.train_question_sql(data['question'], data['sql'])
+            logger.info(f"Trained model with question-SQL pair: {data['question']} -> {data['sql'][:30]}...")
             
         return jsonify({"status": "ok", "message": "Training data added successfully"})
     except Exception as e:
@@ -325,15 +352,24 @@ def process_query():
         # Create a placeholder for the engine
         engine = None
         
-        # Initialize Vanna AI or use mock implementation
-        if VANNA_AVAILABLE:
-            vn = vanna.Vanna()
-            if VANNA_MODEL == 'demo':
+        # Always use the real Vanna API
+        try:
+            # Get API key from environment
+            api_key = os.environ.get("VANNA_API_KEY")
+            if api_key:
+                # Create a new instance of Vanna with the API key
+                vn = vanna.Vanna(api_key=api_key)
+                logger.info("Initializing Vanna with API key")
+            else:
+                # Create a new instance of Vanna
+                vn = vanna.Vanna()
                 # Use demo mode which doesn't require an API key
+                logger.info("Initializing Vanna in demo mode (no API key found)")
                 vn.init_vanna_model()
-        else:
-            # Use our mock implementation
-            logger.warning("Using mock implementation as Vanna isn't available")
+        except Exception as e:
+            logger.error(f"Error initializing Vanna API: {str(e)}")
+            # Only use mock as a fallback if real Vanna fails
+            logger.warning("Falling back to mock implementation as Vanna isn't available")
             vn = MockVanna()
         
         # Extract database schema information or use mock data
