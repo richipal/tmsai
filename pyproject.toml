@@ -12,4 +12,7 @@ dependencies = [
     "python-dotenv>=1.1.0",
     "requests>=2.32.3",
     "chromadb>=1.0.7",
+    "pip>=25.1",
+    "pydantic>=2.11.4",
+    "numpy>=2.2.5",
 ]

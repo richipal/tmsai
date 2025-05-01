@@ -6,11 +6,17 @@ import os
 import logging
 import json
 import random
+import uuid
+from dotenv import load_dotenv
+
+# Load environment variables from .env file if it exists
+load_dotenv()
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Create Flask app and enable CORS
 app = Flask(__name__)
 CORS(app)
 
@@ -29,14 +35,23 @@ except ImportError:
     PANDAS_AVAILABLE = False
     logger.warning("Pandas module not available")
 
+# Import Vanna if available (with all handling)
 try:
     import vanna
+    try:
+        from vanna.remote import VannaDefault
+        VANNA_REMOTE_AVAILABLE = True
+    except ImportError:
+        VANNA_REMOTE_AVAILABLE = False
+        logger.warning("Vanna.remote module not available")
+    
     VANNA_AVAILABLE = True
 except ImportError:
     VANNA_AVAILABLE = False
-    logger.warning("Vanna module not available, using custom HTTP implementation")
+    VANNA_REMOTE_AVAILABLE = False
+    logger.warning("Vanna module not available, using custom implementation")
     
-# Import requests for direct API calls when vanna package is not available
+# Import requests for direct API calls
 try:
     import requests
     REQUESTS_AVAILABLE = True
@@ -44,24 +59,39 @@ except ImportError:
     REQUESTS_AVAILABLE = False
     logger.warning("Requests module not available, API calls will not work")
 
-# Create a mock Vanna implementation for demo purposes
-class VannaAPIClient:
-    """Direct API client for Vanna.AI services with ChromaDB storage.
+# Try to import ChromaDB for vector storage
+try:
+    import chromadb
+    CHROMADB_AVAILABLE = True
+except ImportError:
+    CHROMADB_AVAILABLE = False
+    logger.warning("ChromaDB not available, local vector storage disabled")
+
+# Official Vanna API client implementation based on the vanna-flask repo
+class VannaRemoteClient:
+    """Remote Vanna API client implementation
     
-    This implementation directly uses API endpoints for Vanna AI services
-    and stores data locally in ChromaDB for persistence and vector search.
+    This implementation directly uses API endpoints from Vanna's official API
+    and follows patterns from the vanna-flask repository:
+    https://github.com/vanna-ai/vanna-flask
     """
-    def __init__(self, api_key=None):
+    def __init__(self, api_key=None, model="default"):
         """Initialize with API key"""
         self.api_key = api_key
+        self.model = model
+        
         if not api_key:
-            raise ValueError("API key is required for VannaAPIClient")
+            raise ValueError("API key is required for VannaRemoteClient")
         
         self.headers = {
             "Content-Type": "application/json",
-            "x-api-key": api_key
+            "x-api-key": api_key  # Header style per Vanna API docs
         }
-        logger.info("VannaAPIClient initialized with API key")
+        
+        # API endpoints
+        self.base_url = "https://ask.vanna.ai/api"
+        
+        logger.info(f"VannaRemoteClient initialized with model: {model} and API key")
         
         # Initialize ChromaDB for vector store
         try:
@@ -92,35 +122,14 @@ class VannaAPIClient:
             logger.warning("ChromaDB not available, vector storage disabled")
             self.chroma_client = None
             
-        # Sample training data to use when we have no existing content
-        self.default_training_data = {
-            "question_sql_pairs": [
-                {"question": "Show me the top 5 products by revenue", 
-                 "sql": "SELECT product_name, SUM(unit_price * quantity) as revenue FROM products JOIN order_details ON products.product_id = order_details.product_id GROUP BY product_name ORDER BY revenue DESC LIMIT 5"},
-                {"question": "How many orders do we have by country?", 
-                 "sql": "SELECT country, COUNT(*) as order_count FROM customers JOIN orders ON customers.customer_id = orders.customer_id GROUP BY country ORDER BY order_count DESC"},
-                {"question": "What is our monthly sales trend for 2023?", 
-                 "sql": "SELECT EXTRACT(MONTH FROM order_date) as month, SUM(unit_price * quantity) as sales FROM orders JOIN order_details ON orders.order_id = order_details.order_id WHERE EXTRACT(YEAR FROM order_date) = 2023 GROUP BY month ORDER BY month"},
-                {"question": "Which products are running low on inventory?", 
-                 "sql": "SELECT product_name, units_in_stock, units_on_order FROM products WHERE discontinued = 0 ORDER BY units_in_stock ASC LIMIT 10"},
-                {"question": "How many products do we have in each category?", 
-                 "sql": "SELECT categories.category_name, COUNT(products.product_id) as product_count FROM categories JOIN products ON categories.category_id = products.category_id GROUP BY categories.category_name ORDER BY product_count DESC"}
-            ],
-            "documentation": [
-                {"table": "customers", "description": "Contains all customer data including company information, contact details, and location."},
-                {"table": "products", "description": "Product catalog with pricing, stock information, and category relationships."},
-                {"table": "orders", "description": "Customer orders with dates, shipping details, and relationships to customers."},
-                {"table": "order_details", "description": "Line items for each order, with product quantities and pricing information."},
-                {"table": "categories", "description": "Product categories with names and descriptions."}
-            ],
-            "ddl": [
-                "CREATE TABLE customers (customer_id VARCHAR PRIMARY KEY, company_name VARCHAR, contact_name VARCHAR, country VARCHAR);",
-                "CREATE TABLE products (product_id INT PRIMARY KEY, product_name VARCHAR, unit_price DECIMAL, units_in_stock INT, units_on_order INT, discontinued BOOLEAN, category_id INT);",
-                "CREATE TABLE orders (order_id INT PRIMARY KEY, customer_id VARCHAR, order_date DATE);",
-                "CREATE TABLE order_details (order_id INT, product_id INT, quantity INT, unit_price DECIMAL);",
-                "CREATE TABLE categories (category_id INT PRIMARY KEY, category_name VARCHAR, description VARCHAR);"
-            ]
-        }
+        # Default example questions
+        self.default_questions = [
+            "Show me the top 5 products by revenue",
+            "How many orders do we have by country?",
+            "What is our monthly sales trend for 2023?",
+            "Which products are running low on inventory?",
+            "How many products do we have in each category?"
+        ]
     
     def generate_sql(self, query):
         """Generate SQL from natural language query using Vanna API"""
