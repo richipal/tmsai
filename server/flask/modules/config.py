@@ -18,28 +18,45 @@ except ImportError:
 
 try:
     import vanna
+    
+    # Try to import VannaDefault class first
     try:
-        # Try to import VannaDefault directly
         from vanna import VannaDefault
         VANNA_DEFAULT_AVAILABLE = True
-        logger.info("VannaDefault is available, will use direct instantiation")
+        logger.info("VannaDefault class is available in the vanna package.")
     except (ImportError, AttributeError):
         VANNA_DEFAULT_AVAILABLE = False
-        logger.warning("VannaDefault not available in vanna package")
+        logger.warning("VannaDefault not available directly in vanna package.")
     
+    # Try to access Vanna class
+    try:
+        if hasattr(vanna, 'Vanna'):
+            VANNA_CLASS_AVAILABLE = True
+            logger.info("Vanna class is available in the vanna package.")
+        else:
+            VANNA_CLASS_AVAILABLE = False
+            logger.warning("Vanna class not found in vanna package.")
+    except Exception as e:
+        VANNA_CLASS_AVAILABLE = False
+        logger.warning(f"Error checking for Vanna class: {str(e)}")
+    
+    # Try to import vanna.remote
     try:
         import vanna.remote
         VANNA_REMOTE_AVAILABLE = True
+        logger.info("vanna.remote module is available.")
     except ImportError:
         VANNA_REMOTE_AVAILABLE = False
-        logger.warning("vanna.remote not available")
+        logger.warning("vanna.remote module not available.")
     
     VANNA_AVAILABLE = True
-except ImportError:
+    logger.info(f"Vanna version {vanna.__version__} successfully imported.")
+except ImportError as e:
     VANNA_AVAILABLE = False
     VANNA_DEFAULT_AVAILABLE = False
+    VANNA_CLASS_AVAILABLE = False
     VANNA_REMOTE_AVAILABLE = False
-    logger.warning("Vanna module not available, using custom implementation")
+    logger.warning(f"Vanna module not available: {str(e)}")
 
 try:
     import chromadb

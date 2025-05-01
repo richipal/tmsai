@@ -417,49 +417,67 @@ class VannaRemoteClient:
         return True
 
 class OfficialVannaClient:
-    """Uses the official Vanna API directly via VannaDefault"""
+    """Uses the official Vanna API directly via VannaDefault or Vanna class"""
     
     def __init__(self, api_key=None, model=None):
         """Initialize with API key and model"""
-        from .config import OPENAI_API_KEY, VANNA_MODEL, VANNA_DEFAULT_AVAILABLE
+        from .config import (
+            OPENAI_API_KEY, VANNA_MODEL, 
+            VANNA_DEFAULT_AVAILABLE, VANNA_CLASS_AVAILABLE
+        )
         
         # Get OpenAI API key from environment to use with Vanna
         self.api_key = OPENAI_API_KEY 
         self.model = model or VANNA_MODEL
         self.vn = None
         
-        # Initialize the official client if VannaDefault is available
+        # First try using VannaDefault directly which is the preferred approach
         if VANNA_DEFAULT_AVAILABLE:
             try:
                 # Import VannaDefault directly
                 from vanna import VannaDefault
                 
                 # Initialize VannaDefault with model and OpenAI API key as specified
-                # Using the pattern: VannaDefault(model=os.environ['VANNA_MODEL'], api_key=os.environ['OPENAI_API_KEY'])
+                # Using the pattern: VannaDefault(model=os.environ['VANNA_MODEL'], api_key=os.environ['OPENAI_API_KEY']) 
                 logger.info(f"Initializing VannaDefault with model={self.model}, api_key=OpenAI API key")
                 self.vn = VannaDefault(model=self.model, api_key=self.api_key)
                 logger.info(f"Successfully initialized VannaDefault with model: {self.model}")
-                
-                # Initialize with ChromaDB
-                if CHROMADB_AVAILABLE:
-                    try:
-                        # We still use ChromaDB for vector storage in the official client
-                        # to ensure consistent behavior with our custom implementation
-                        self.chroma_client = chromadb.Client()
-                        self.ddl_collection = self.chroma_client.get_or_create_collection(name="ddl")
-                        self.documentation_collection = self.chroma_client.get_or_create_collection(name="documentation")
-                        self.question_sql_collection = self.chroma_client.get_or_create_collection(name="question_sql")
-                        logger.info("ChromaDB collections initialized for official client")
-                    except Exception as e:
-                        logger.error(f"Error initializing ChromaDB for official client: {str(e)}")
-                
-                logger.info(f"OfficialVannaClient initialized with model: {self.model}")
+                logger.info(f"OfficialVannaClient initialized with VannaDefault")
+                return
             except Exception as e:
                 logger.error(f"Error initializing VannaDefault: {str(e)}")
                 self.vn = None
-        else:
-            logger.warning("VannaDefault not available in the Vanna package")
-            self.vn = None
+        
+        # Fall back to using the Vanna class if available
+        if VANNA_CLASS_AVAILABLE and not self.vn:
+            try:
+                # Import Vanna class
+                import vanna
+                
+                # Initialize Vanna with API key
+                logger.info(f"Initializing Vanna class with api_key=OpenAI API key")
+                
+                if hasattr(vanna, 'Vanna'):
+                    # Create Vanna instance
+                    self.vn = vanna.Vanna(api_key=self.api_key)
+                    
+                    # Set model if supported
+                    if hasattr(self.vn, 'set_model'):
+                        self.vn.set_model(self.model)
+                        logger.info(f"Set model to {self.model}")
+                    
+                    logger.info(f"Successfully initialized Vanna class")
+                    logger.info(f"OfficialVannaClient initialized with Vanna class")
+                    return
+                else:
+                    logger.warning("Vanna class not found in vanna package")
+            except Exception as e:
+                logger.error(f"Error initializing Vanna class: {str(e)}")
+                self.vn = None
+        
+        # If we got here, both VannaDefault and Vanna failed
+        logger.warning("Failed to initialize Vanna package classes")
+        self.vn = None
             
     def generate_questions(self):
         """Generate example questions for the UI"""
