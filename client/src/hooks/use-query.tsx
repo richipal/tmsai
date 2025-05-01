@@ -28,6 +28,10 @@ export const useNaturalLanguageQuery = (databaseConnectionId: number) => {
   
   const setExampleQuery = (example: string) => {
     setQueryInput(example);
+    // Automatically execute query when an example is selected
+    setTimeout(() => {
+      mutate(example);
+    }, 100); // Small delay to ensure UI updates first
   };
   
   return {
