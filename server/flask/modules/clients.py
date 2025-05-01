@@ -420,21 +420,21 @@ class OfficialVannaClient:
     """Uses the official Vanna API directly via VannaDefault"""
     
     def __init__(self, api_key=None, model=None):
-        """Initialize with API key"""
-        self.api_key = api_key or API_KEY
+        """Initialize with API key and model"""
+        from .config import OPENAI_API_KEY, VANNA_MODEL
+        
+        # Get OpenAI API key from environment to use with Vanna
+        self.api_key = OPENAI_API_KEY 
         self.model = model or VANNA_MODEL
         self.vn = None
         
         # Initialize the official client if available
         if VANNA_AVAILABLE:
             try:
-                self.vn = vanna.Vanna(api_key=self.api_key)
+                # Initialize VannaDefault with model and OpenAI API key as specified
+                self.vn = vanna.VannaDefault(model=self.model, api_key=self.api_key)
+                logger.info(f"Initialized VannaDefault with model: {self.model} and OpenAI API key")
                 
-                # Initialize the model if needed
-                if self.api_key == "demo":
-                    logger.info("Initializing Vanna in demo mode")
-                    self.vn.init_vanna_model()
-                    
                 # Initialize with ChromaDB
                 if CHROMADB_AVAILABLE:
                     try:
@@ -450,7 +450,7 @@ class OfficialVannaClient:
                 
                 logger.info(f"OfficialVannaClient initialized with model: {self.model}")
             except Exception as e:
-                logger.error(f"Error initializing official Vanna client: {str(e)}")
+                logger.error(f"Error initializing VannaDefault: {str(e)}")
                 self.vn = None
         else:
             logger.warning("Official Vanna package not available")
@@ -486,10 +486,13 @@ class OfficialVannaClient:
             return "SELECT * FROM customers LIMIT 5;"
             
         try:
-            sql = self.vn.generate_sql(question)
+            # Explicitly call generate_sql with question parameter
+            logger.info(f"Calling VannaDefault.generate_sql with question: {question}")
+            sql = self.vn.generate_sql(question=question)
+            logger.info(f"Generated SQL from VannaDefault: {sql[:100]}...")
             return sql
         except Exception as e:
-            logger.error(f"Error generating SQL with official client: {str(e)}")
+            logger.error(f"Error generating SQL with VannaDefault: {str(e)}")
             # Fall back to our custom implementation for reliability
             remote_client = VannaRemoteClient(api_key=self.api_key, model=self.model)
             return remote_client.generate_sql(question)
@@ -500,10 +503,13 @@ class OfficialVannaClient:
             return "This query retrieves data from the database."
             
         try:
-            answer = self.vn.ask(question)
+            # Explicitly call ask with question parameter
+            logger.info(f"Calling VannaDefault.ask with question: {question}")
+            answer = self.vn.ask(question=question)
+            logger.info(f"Got answer from VannaDefault: {answer[:100]}...")
             return answer
         except Exception as e:
-            logger.error(f"Error asking question with official client: {str(e)}")
+            logger.error(f"Error asking question with VannaDefault: {str(e)}")
             # Fall back to our custom implementation for reliability
             remote_client = VannaRemoteClient(api_key=self.api_key, model=self.model)
             return remote_client.ask(question)
@@ -514,10 +520,12 @@ class OfficialVannaClient:
             return False
             
         try:
+            # Training with VannaDefault should use the train method with the appropriate parameters
             if ddl:
-                if hasattr(self.vn, "train_ddl"):
-                    self.vn.train_ddl(ddl)
-                # Also store in ChromaDB if available
+                logger.info(f"Training VannaDefault with DDL: {ddl[:50]}...")
+                # VannaDefault takes a ddl parameter to the train method
+                self.vn.train(ddl=ddl)
+                # Also store in ChromaDB if available for consistency
                 if hasattr(self, "ddl_collection") and self.ddl_collection:
                     try:
                         ddl_id = hashlib.md5(ddl.encode()).hexdigest()
@@ -526,8 +534,9 @@ class OfficialVannaClient:
                         logger.error(f"Error storing DDL in ChromaDB: {str(e)}")
                         
             if documentation:
-                if hasattr(self.vn, "train_documentation"):
-                    self.vn.train_documentation(documentation)
+                logger.info(f"Training VannaDefault with documentation: {documentation[:50]}...")
+                # VannaDefault takes a documentation parameter to the train method
+                self.vn.train(documentation=documentation)
                 # Also store in ChromaDB if available
                 if hasattr(self, "documentation_collection") and self.documentation_collection:
                     try:
@@ -537,8 +546,9 @@ class OfficialVannaClient:
                         logger.error(f"Error storing documentation in ChromaDB: {str(e)}")
                         
             if question and sql:
-                if hasattr(self.vn, "train_question_sql"):
-                    self.vn.train_question_sql(question, sql)
+                logger.info(f"Training VannaDefault with question-SQL pair: {question} -> {sql[:50]}...")
+                # VannaDefault takes question and sql parameters to the train method
+                self.vn.train(question=question, sql=sql)
                 # Also store in ChromaDB if available
                 if hasattr(self, "question_sql_collection") and self.question_sql_collection:
                     try:
@@ -553,7 +563,7 @@ class OfficialVannaClient:
                         
             return True
         except Exception as e:
-            logger.error(f"Error training with official client: {str(e)}")
+            logger.error(f"Error training with VannaDefault: {str(e)}")
             return False
             
     def get_training_data(self):
