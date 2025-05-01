@@ -1075,17 +1075,24 @@ class HTTPVannaClient:
         
 def initialize_vanna_client():
     """Initialize Vanna client based on available packages and configuration"""
-    api_key = os.getenv("VANNA_API_KEY")
-    model = os.getenv("VANNA_MODEL", "default")  # Default model
+    from .config import API_KEY, VANNA_MODEL, LOCAL_MODE
     
-    if not api_key:
-        logger.warning("VANNA_API_KEY not found in environment, using demo key")
-        api_key = "demo"  # Use demo key for development
+    model = VANNA_MODEL  # Use model from config
+    api_key = API_KEY    # Use API key from config (None for local mode)
     
-    logger.info(f"Using model: {model}")
+    logger.info(f"Using model: {model} with local mode: {LOCAL_MODE}")
     
-    # Choose the best implementation available
-    if VANNA_REMOTE_AVAILABLE:
+    # In local mode, prioritize ChromaDB for storage without API
+    if LOCAL_MODE and CHROMADB_AVAILABLE:
+        try:
+            # Use HTTPVannaClient which works well with local ChromaDB
+            logger.info("Using HTTPVannaClient for local mode with ChromaDB...")
+            return HTTPVannaClient(api_key=None, model="local")
+        except Exception as e:
+            logger.warning(f"HTTPVannaClient for local mode failed: {str(e)}")
+    
+    # Try the other implementations as fallbacks
+    if VANNA_REMOTE_AVAILABLE and not LOCAL_MODE:
         try:
             # Try to use the official Vanna library implementation
             logger.info("Trying OfficialVannaClient...")
@@ -1093,9 +1100,9 @@ def initialize_vanna_client():
         except Exception as e:
             logger.warning(f"Official Vanna client failed: {str(e)}")
             
-    if REQUESTS_AVAILABLE:
+    if REQUESTS_AVAILABLE and not LOCAL_MODE:
         try:
-            # Fall back to HTTP-based implementation
+            # Fall back to HTTP-based implementation for cloud API
             logger.info("Trying HTTPVannaClient...")
             return HTTPVannaClient(api_key=api_key, model=model)
         except Exception as e:

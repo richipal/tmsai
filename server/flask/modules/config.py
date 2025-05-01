@@ -31,13 +31,16 @@ try:
     CHROMADB_AVAILABLE = True
 except ImportError:
     CHROMADB_AVAILABLE = False
-    logger.warning("ChromaDB module not available, in-memory vector store will not work")
+    logger.warning(
+        "ChromaDB module not available, in-memory vector store will not work")
 
-# Get API key from environment
-API_KEY = os.environ.get("VANNA_API_KEY", "demo")
-# Initialize Vanna AI with mode from environment variable
-VANNA_MODEL = os.environ.get('VANNA_MODEL', 'demo')
-logger.info(f"Using Vanna model: {VANNA_MODEL}")
+# For local mode, we don't need an API key - set to None to indicate local mode
+API_KEY = None
+# Initialize Vanna AI with mode from environment variable, or use 'local' for local mode
+VANNA_MODEL = os.environ.get('VANNA_MODEL', 'local')
+# Flag to indicate we're running in local mode (no API key/cloud dependencies)
+LOCAL_MODE = True
+logger.info(f"Using Vanna model: {VANNA_MODEL} in local mode")
 
 # Default examples for the UI
 DEFAULT_EXAMPLES = [

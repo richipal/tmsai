@@ -1,6 +1,6 @@
 flask==2.2.3
 flask-cors==3.0.10
-vanna==0.0.20
+vanna
 sqlalchemy==2.0.25
 pymysql==1.1.0
 psycopg2-binary==2.9.9
