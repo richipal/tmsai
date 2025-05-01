@@ -26,13 +26,7 @@ export const useNaturalLanguageQuery = (databaseConnectionId: number) => {
     }
   };
   
-  const setExampleQuery = (example: string) => {
-    setQueryInput(example);
-    // Automatically execute query when an example is selected
-    setTimeout(() => {
-      mutate(example);
-    }, 100); // Small delay to ensure UI updates first
-  };
+  // No longer need this as it's handled directly in dashboard component
   
   return {
     queryInput,
@@ -41,8 +35,7 @@ export const useNaturalLanguageQuery = (databaseConnectionId: number) => {
     isPending,
     isError,
     error,
-    handleExecuteQuery,
-    setExampleQuery
+    handleExecuteQuery
   };
 };
 

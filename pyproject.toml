@@ -8,4 +8,5 @@ dependencies = [
     "flask>=3.1.0",
     "pandas>=2.2.3",
     "sqlalchemy>=2.0.40",
+    "pymysql>=1.1.1",
 ]

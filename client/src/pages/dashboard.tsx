@@ -41,9 +41,18 @@ export default function Dashboard() {
     setQueryInput,
     queryResult,
     isPending,
-    handleExecuteQuery,
-    setExampleQuery
+    handleExecuteQuery
   } = useNaturalLanguageQuery(selectedConnectionId);
+  
+  // Handle example query selection
+  const handleExampleQuerySelect = (example: string) => {
+    setQueryInput(example);
+    // Use setTimeout to ensure state is updated before executing
+    setTimeout(() => {
+      // Directly call the execute function with the example
+      handleExecuteQuery();
+    }, 50);
+  };
   
   // Handle connection change
   const handleConnectionChange = (connectionId: number) => {
@@ -79,7 +88,7 @@ export default function Dashboard() {
                   
                   <ExampleQueries 
                     examples={EXAMPLE_QUERIES}
-                    onSelect={setExampleQuery}
+                    onSelect={handleExampleQuerySelect}
                   />
                 </CardContent>
               </Card>
