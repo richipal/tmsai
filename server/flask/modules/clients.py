@@ -689,13 +689,13 @@ class OfficialVannaClient:
             return False
 
 class HTTPVannaClient:
-    """HTTP-based implementation of Vanna API using direct REST calls"""
-    
-    BASE_URL = "https://ask.vanna.ai/rpc"
+    """HTTP-based implementation using OpenAI API directly for GPT-4o"""
     
     def __init__(self, api_key=None, model=None):
-        """Initialize with API key"""
-        self.api_key = api_key or API_KEY
+        """Initialize with OpenAI API key and model"""
+        from .config import OPENAI_API_KEY, VANNA_MODEL
+        
+        self.openai_api_key = OPENAI_API_KEY
         self.model = model or VANNA_MODEL
         
         # Initialize ChromaDB if available
@@ -721,59 +721,97 @@ class HTTPVannaClient:
         logger.info(f"HTTPVannaClient initialized with model: {self.model}")
             
     def generate_sql(self, query):
-        """Generate SQL from natural language query"""
+        """Generate SQL from natural language query using OpenAI API directly"""
         if not REQUESTS_AVAILABLE:
             logger.error("Requests module not available")
             return "SELECT * FROM customers LIMIT 5"
             
         import requests
         
+        # Check if we have database schema from ChromaDB
+        schema_context = ""
+        if self.chroma_client and self.ddl_collection:
+            try:
+                results = self.ddl_collection.get()
+                if results and results["documents"]:
+                    schema_context = "Database Schema:\n" + "\n".join(results["documents"])
+            except Exception as e:
+                logger.error(f"Error retrieving schema from ChromaDB: {str(e)}")
+        
         try:
-            url = f"{self.BASE_URL}/generate_sql"
+            # Use OpenAI API directly
+            url = "https://api.openai.com/v1/chat/completions"
             headers = {
                 "Content-Type": "application/json",
-                "Accept": "application/json"
-            }
-            data = {
-                "question": query,
-                "api_key": self.api_key
+                "Authorization": f"Bearer {self.openai_api_key}"
             }
             
-            response = requests.post(url, headers=headers, json=data)
-            if response.status_code == 200:
-                return response.json().get("sql", "")
+            # Construct the system prompt with schema if available
+            system_prompt = "You are an expert SQL developer. Your task is to convert natural language queries into valid SQL queries."
+            if schema_context:
+                system_prompt += f"\n\n{schema_context}"
             else:
-                logger.warning(f"Generate SQL API failed: {response.text}")
+                system_prompt += """
+                \n\nThe database follows a standard Northwind schema with these tables:
+                - customers (customer_id, company_name, contact_name, country)
+                - products (product_id, product_name, unit_price, units_in_stock, discontinued, category_id)
+                - orders (order_id, customer_id, order_date)
+                - order_details (order_id, product_id, quantity, unit_price)
+                - categories (category_id, category_name, description)
+                """
+            
+            # Construct the user prompt
+            user_prompt = f"Convert this natural language query to SQL: {query}"
+            
+            # Create the payload
+            data = {
+                "model": self.model,
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                "temperature": 0.3,
+                "response_format": {"type": "text"}
+            }
+            
+            # Call the OpenAI API
+            logger.info(f"Sending request to OpenAI API for SQL generation: {query}")
+            response = requests.post(url, headers=headers, json=data)
+            
+            if response.status_code == 200:
+                response_json = response.json()
+                sql = response_json["choices"][0]["message"]["content"].strip()
                 
-                # Try alternative API format
-                alt_url = "https://ask.vanna.ai/api/sql"
-                alt_headers = {
-                    "Authorization": f"Bearer {self.api_key}",
-                    "Content-Type": "application/json"
-                }
-                alt_data = {
-                    "question": query
-                }
+                # Clean up SQL (remove markdown formatting if present)
+                if sql.startswith("```sql"):
+                    sql = sql.replace("```sql", "").replace("```", "").strip()
+                elif sql.startswith("```"):
+                    sql = sql.replace("```", "").strip()
                 
-                alt_response = requests.post(alt_url, headers=alt_headers, json=alt_data)
-                if alt_response.status_code == 200:
-                    return alt_response.json().get("sql", "")
+                logger.info(f"Successfully generated SQL with OpenAI: {sql[:100]}...")
+                return sql
+            else:
+                logger.warning(f"OpenAI API error: {response.text}")
+                logger.warning("Falling back to local SQL generation")
+                
+                # Fall back to local generation
+                if "country" in query.lower() and "order" in query.lower():
+                    return "SELECT country, COUNT(*) as order_count FROM customers JOIN orders ON customers.customer_id = orders.customer_id GROUP BY country ORDER BY order_count DESC"
+                elif "product" in query.lower() and "revenue" in query.lower():
+                    return "SELECT product_name, SUM(unit_price * quantity) as revenue FROM products JOIN order_details ON products.product_id = order_details.product_id GROUP BY product_name ORDER BY revenue DESC LIMIT 5"
+                elif "sales" in query.lower() and "month" in query.lower():
+                    return "SELECT MONTH(order_date) as month, SUM(od.quantity * od.unit_price) as sales FROM orders o JOIN order_details od ON o.order_id = od.order_id GROUP BY MONTH(order_date) ORDER BY month"
+                elif "inventory" in query.lower() or "stock" in query.lower():
+                    return "SELECT product_name, units_in_stock FROM products WHERE units_in_stock < 10 ORDER BY units_in_stock ASC"
                 else:
-                    logger.warning(f"Alternative API format failed as well: {alt_response.text}")
+                    return "SELECT * FROM customers LIMIT 5"
                     
-                    # Fall back to local generation
-                    if "country" in query.lower():
-                        return "SELECT country, COUNT(*) as order_count FROM customers JOIN orders ON customers.customer_id = orders.customer_id GROUP BY country ORDER BY order_count DESC"
-                    elif "product" in query.lower() and "revenue" in query.lower():
-                        return "SELECT product_name, SUM(unit_price * quantity) as revenue FROM products JOIN order_details ON products.product_id = order_details.product_id GROUP BY product_name ORDER BY revenue DESC LIMIT 5"
-                    else:
-                        return "SELECT * FROM customers LIMIT 5"
         except Exception as e:
-            logger.error(f"Error generating SQL: {str(e)}")
+            logger.error(f"Error generating SQL with OpenAI: {str(e)}")
             return "SELECT * FROM customers LIMIT 5"
             
     def ask(self, question):
-        """Ask a question about SQL"""
+        """Ask a question about SQL using OpenAI"""
         if not REQUESTS_AVAILABLE:
             logger.error("Requests module not available")
             return "This query retrieves data from the database."
@@ -781,56 +819,62 @@ class HTTPVannaClient:
         import requests
         
         try:
-            url = f"{self.BASE_URL}/ask"
+            # Use OpenAI API directly
+            url = "https://api.openai.com/v1/chat/completions"
             headers = {
                 "Content-Type": "application/json",
-                "Accept": "application/json"
-            }
-            data = {
-                "question": question,
-                "api_key": self.api_key
+                "Authorization": f"Bearer {self.openai_api_key}"
             }
             
+            # Extract SQL part if the question is about explaining SQL
+            sql_part = ""
+            if "SQL query does:" in question:
+                sql_part = question.split("SQL query does:")[-1].strip()
+                
+            # Create the payload
+            data = {
+                "model": self.model,
+                "messages": [
+                    {"role": "system", "content": "You are an expert SQL developer explaining SQL queries in simple terms."},
+                    {"role": "user", "content": question}
+                ],
+                "temperature": 0.3,
+                "response_format": {"type": "text"}
+            }
+            
+            # Call the OpenAI API
+            logger.info(f"Sending request to OpenAI API for explanation: {question[:100]}...")
             response = requests.post(url, headers=headers, json=data)
+            
             if response.status_code == 200:
-                return response.json().get("answer", "")
+                response_json = response.json()
+                explanation = response_json["choices"][0]["message"]["content"].strip()
+                logger.info(f"Successfully generated explanation with OpenAI: {explanation[:100]}...")
+                return explanation
             else:
-                logger.warning(f"Ask API failed: {response.text}")
+                logger.warning(f"OpenAI API error: {response.text}")
+                logger.warning("Falling back to local explanation generation")
                 
-                # Try alternative API format
-                alt_url = "https://ask.vanna.ai/api/answer"
-                alt_headers = {
-                    "Authorization": f"Bearer {self.api_key}",
-                    "Content-Type": "application/json"
-                }
-                alt_data = {
-                    "question": question
-                }
-                
-                alt_response = requests.post(alt_url, headers=alt_headers, json=alt_data)
-                if alt_response.status_code == 200:
-                    return alt_response.json().get("answer", "")
-                else:
-                    logger.warning(f"Alternative API format failed as well: {alt_response.text}")
-                    
-                    # Generate a response based on the question
-                    if "what" in question.lower() and "sql" in question.lower():
-                        # If it's a question about SQL
-                        sql_part = question.split("SQL query does:")[-1].strip() if "SQL query does:" in question else ""
-                        if "country" in sql_part.lower() and "group by" in sql_part.lower():
-                            return "This SQL query counts the number of orders placed by customers in each country. It joins the customers and orders tables on the customer_id field, groups the results by country, and orders them by order count in descending order."
-                        elif "product" in sql_part.lower() and "revenue" in sql_part.lower():
-                            return "This SQL query calculates the total revenue generated by each product. It joins the products and order_details tables, multiplies the unit price by the quantity to get revenue for each line item, then groups by product name and orders by revenue in descending order."
-                        else:
-                            return "This SQL query retrieves data from the database based on the specified conditions."
+                # Generate a response based on the question
+                if "what" in question.lower() and "sql" in question.lower():
+                    # If it's a question about SQL
+                    if "country" in sql_part.lower() and "group by" in sql_part.lower():
+                        return "This SQL query counts the number of orders placed by customers in each country. It joins the customers and orders tables on the customer_id field, groups the results by country, and orders them by order count in descending order."
+                    elif "product" in sql_part.lower() and "revenue" in sql_part.lower():
+                        return "This SQL query calculates the total revenue generated by each product. It joins the products and order_details tables, multiplies the unit price by the quantity to get revenue for each line item, then groups by product name and orders by revenue in descending order."
+                    elif "inventory" in sql_part.lower() or "stock" in sql_part.lower():
+                        return "This SQL query finds products with low inventory levels. It selects products where the units in stock are below a threshold, and orders them by the stock level in ascending order to show the most critical items first."
                     else:
-                        return "This query retrieves specific data from the database according to your requirements."
+                        return "This SQL query retrieves specific data from the database based on the given conditions and formatting requirements."
+                else:
+                    return "This query retrieves specific data from the database according to the business requirements."
+                    
         except Exception as e:
-            logger.error(f"Error asking question: {str(e)}")
-            return "This query retrieves data from the database."
+            logger.error(f"Error generating explanation with OpenAI: {str(e)}")
+            return "This query retrieves data from the database according to the specified conditions."
             
     def get_example_questions(self):
-        """Get example questions"""
+        """Generate example questions using OpenAI"""
         if not REQUESTS_AVAILABLE:
             logger.error("Requests module not available")
             return [
@@ -844,48 +888,82 @@ class HTTPVannaClient:
         import requests
         
         try:
-            url = f"{self.BASE_URL}/get_example_questions"
+            # Use OpenAI API directly to generate example questions
+            url = "https://api.openai.com/v1/chat/completions"
             headers = {
                 "Content-Type": "application/json",
-                "Accept": "application/json"
-            }
-            data = {
-                "api_key": self.api_key
+                "Authorization": f"Bearer {self.openai_api_key}"
             }
             
+            # System prompt explaining the schema
+            system_prompt = """You are an expert SQL assistant. Generate 8 diverse example natural language questions for a Northwind-style database with these tables:
+            - customers (customer_id, company_name, contact_name, country)
+            - products (product_id, product_name, unit_price, units_in_stock, discontinued, category_id)
+            - orders (order_id, customer_id, order_date)
+            - order_details (order_id, product_id, quantity, unit_price)
+            - categories (category_id, category_name, description)
+            
+            The questions should be focused on business insights that can be derived from this data."""
+            
+            # Create the payload
+            data = {
+                "model": self.model,
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": "Generate example natural language questions for SQL queries that users might want to ask."}
+                ],
+                "temperature": 0.7,
+                "response_format": {"type": "json_object"}
+            }
+            
+            # Add response format to ensure we get a JSON response
+            data["messages"][0]["content"] += " Return the questions as a JSON array with the key 'questions'."
+            
+            # Call the OpenAI API
+            logger.info("Generating example questions with OpenAI")
             response = requests.post(url, headers=headers, json=data)
+            
             if response.status_code == 200:
-                examples = response.json().get("example_questions", [])
-                if not examples or len(examples) < 3:
-                    # Add some defaults if API didn't return enough
-                    default_examples = [
-                        "Show me the top 5 products by revenue",
-                        "How many orders do we have by country?",
-                        "What is our monthly sales trend for 2023?",
-                        "Which products are running low on inventory?",
-                        "How many products do we have in each category?"
-                    ]
-                    examples.extend(default_examples)
-                    # Remove duplicates
-                    examples = list(dict.fromkeys(examples))
-                return examples[:10]  # Return up to 10 examples
-            else:
-                logger.warning(f"Get example questions API failed: {response.text}")
-                return [
-                    "Show me the top 5 products by revenue",
-                    "How many orders do we have by country?",
-                    "What is our monthly sales trend for 2023?",
-                    "Which products are running low on inventory?",
-                    "How many products do we have in each category?"
-                ]
-        except Exception as e:
-            logger.error(f"Error getting example questions: {str(e)}")
+                try:
+                    response_json = response.json()
+                    content = response_json["choices"][0]["message"]["content"]
+                    
+                    # Parse the JSON content
+                    import json
+                    content_json = json.loads(content)
+                    
+                    if "questions" in content_json and isinstance(content_json["questions"], list):
+                        examples = content_json["questions"]
+                        logger.info(f"Successfully generated {len(examples)} example questions with OpenAI")
+                        return examples
+                    else:
+                        logger.warning("Unexpected JSON format from OpenAI, using default examples")
+                except Exception as e:
+                    logger.error(f"Error parsing OpenAI response: {str(e)}")
+            
+            # Return default examples if anything fails
+            logger.warning("Using default example questions")
             return [
                 "Show me the top 5 products by revenue",
                 "How many orders do we have by country?",
                 "What is our monthly sales trend for 2023?",
                 "Which products are running low on inventory?",
-                "How many products do we have in each category?"
+                "How many products do we have in each category?",
+                "Which customers have not placed orders in the last 3 months?",
+                "What is the average order value by country?",
+                "Which product categories have the highest profit margins?"
+            ]
+        except Exception as e:
+            logger.error(f"Error generating example questions with OpenAI: {str(e)}")
+            return [
+                "Show me the top 5 products by revenue",
+                "How many orders do we have by country?",
+                "What is our monthly sales trend for 2023?",
+                "Which products are running low on inventory?",
+                "How many products do we have in each category?",
+                "Which customers have not placed orders in the last 3 months?",
+                "What is the average order value by country?",
+                "Which product categories have the highest profit margins?"
             ]
             
     def get_training_data(self):

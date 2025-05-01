@@ -34,13 +34,19 @@ except ImportError:
     logger.warning(
         "ChromaDB module not available, in-memory vector store will not work")
 
-# For local mode, we don't need an API key - set to None to indicate local mode
+# Get the OpenAI API key from environment variables
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
+
+# Configure model to use GPT-4o
+VANNA_MODEL = 'gpt-4o'  # Using OpenAI's latest model
+
+# Set API key to None (we'll use OpenAI API directly)
 API_KEY = None
-# Initialize Vanna AI with mode from environment variable, or use 'local' for local mode
-VANNA_MODEL = os.environ.get('VANNA_MODEL', 'local')
-# Flag to indicate we're running in local mode (no API key/cloud dependencies)
+
+# Flag to indicate we're running with OpenAI GPT-4o integration
 LOCAL_MODE = True
-logger.info(f"Using Vanna model: {VANNA_MODEL} in local mode")
+
+logger.info(f"Using OpenAI model: {VANNA_MODEL} with direct integration")
 
 # Default examples for the UI
 DEFAULT_EXAMPLES = [
