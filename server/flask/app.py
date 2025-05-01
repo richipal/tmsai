@@ -518,35 +518,141 @@ class VannaRemoteClient:
         logger.info("VannaAPIClient model initialization complete")
         return True
 
+# Simple Memory Cache for storing query results
+class MemoryCache:
+    def __init__(self):
+        self.cache = {}
+        
+    def generate_id(self, **kwargs):
+        # Generate a unique ID based on the question
+        if 'question' in kwargs:
+            id = str(uuid.uuid4())
+            self.set(id=id, field='question', value=kwargs['question'])
+            return id
+        return str(uuid.uuid4())
+        
+    def set(self, id, field, value):
+        if id not in self.cache:
+            self.cache[id] = {}
+        self.cache[id][field] = value
+        
+    def get(self, id, field):
+        if id in self.cache and field in self.cache[id]:
+            return self.cache[id][field]
+        return None
+        
+    def clear(self, id=None):
+        if id:
+            if id in self.cache:
+                del self.cache[id]
+        else:
+            self.cache = {}
+
+# Create cache for storing queries and results
+cache = MemoryCache()
+
+# Create the Official Vanna API Client
+class OfficialVannaClient:
+    """Uses the official Vanna API directly via VannaDefault"""
+    
+    def __init__(self, api_key=None, model=None):
+        """Initialize with API key"""
+        if not VANNA_REMOTE_AVAILABLE:
+            raise ImportError("VannaDefault is not available")
+            
+        self.api_key = api_key
+        self.model = model or "chromadb"
+        
+        # Initialize VannaDefault
+        from vanna.remote import VannaDefault
+        self.vn = VannaDefault(api_key=api_key, model=self.model)
+        logger.info(f"OfficialVannaClient initialized with model: {self.model}")
+        
+    def generate_questions(self):
+        """Generate example questions for the UI"""
+        logger.info("Generating questions using official Vanna API")
+        return self.vn.generate_questions()
+    
+    def generate_sql(self, question):
+        """Generate SQL from a natural language question"""
+        logger.info(f"Generating SQL for question: {question}")
+        return self.vn.generate_sql(question=question)
+    
+    def ask(self, question):
+        """Ask a question about SQL or data"""
+        logger.info(f"Asking question: {question}")
+        return self.vn.ask(question=question)
+    
+    def train(self, question=None, sql=None, ddl=None, documentation=None):
+        """Train the model with various data"""
+        logger.info("Training model with data")
+        return self.vn.train(question=question, sql=sql, ddl=ddl, documentation=documentation)
+    
+    def get_training_data(self):
+        """Get all training data"""
+        logger.info("Getting training data")
+        return self.vn.get_training_data()
+    
+    def run_sql(self, sql):
+        """Run SQL query"""
+        logger.info(f"Running SQL: {sql}")
+        try:
+            return self.vn.run_sql(sql=sql)
+        except Exception as e:
+            logger.error(f"Error running SQL: {str(e)}")
+            # For demo purposes, generate mock data
+            return pd.DataFrame(get_mock_data_for_query(sql)[0])
+            
+    def remove_training_data(self, id):
+        """Remove training data by ID"""
+        logger.info(f"Removing training data with ID: {id}")
+        return self.vn.remove_training_data(id=id)
+
 # HTTP-based implementation for Vanna API when the package isn't available
-class HTTPVanna:
+class HTTPVannaClient:
     """HTTP-based implementation of Vanna API using direct REST calls"""
     
     BASE_URL = "https://ask.vanna.ai/rpc"
     
-    def __init__(self, api_key=None):
+    def __init__(self, api_key=None, model=None):
         """Initialize with API key"""
         self.api_key = api_key
         if not api_key:
-            raise ValueError("API key is required for HTTPVanna")
+            raise ValueError("API key is required for HTTPVannaClient")
         
+        self.model = model or "chromadb"
         self.headers = {
             "Content-Type": "application/json",
             "x-api-key": api_key
         }
-        logger.info("HTTPVanna initialized with API key")
+        logger.info(f"HTTPVannaClient initialized with model: {self.model}")
         
         # Initialize ChromaDB for vector store
         try:
             import chromadb
             self.chroma_client = chromadb.Client()
-            # Create collections for different data types
-            self.documentation_collection = self.chroma_client.create_collection(name="documentation")
-            self.ddl_collection = self.chroma_client.create_collection(name="ddl")
-            self.question_sql_collection = self.chroma_client.create_collection(name="question_sql")
+            # Create collections for different data types (if they don't exist)
+            try:
+                self.documentation_collection = self.chroma_client.create_collection(name="documentation")
+            except Exception as e:
+                logger.info(f"Using existing documentation collection: {str(e)}")
+                self.documentation_collection = self.chroma_client.get_collection(name="documentation")
+                
+            try:
+                self.ddl_collection = self.chroma_client.create_collection(name="ddl")
+            except Exception as e:
+                logger.info(f"Using existing DDL collection: {str(e)}")
+                self.ddl_collection = self.chroma_client.get_collection(name="ddl")
+                
+            try:
+                self.question_sql_collection = self.chroma_client.create_collection(name="question_sql")
+            except Exception as e:
+                logger.info(f"Using existing question-SQL collection: {str(e)}")
+                self.question_sql_collection = self.chroma_client.get_collection(name="question_sql")
+                
             logger.info("ChromaDB collections initialized for in-memory usage")
-        except ImportError:
-            logger.warning("ChromaDB not available, vector storage disabled")
+        except Exception as e:
+            logger.warning(f"ChromaDB initialization error: {str(e)}")
             self.chroma_client = None
     
     def generate_sql(self, query):
@@ -1114,6 +1220,11 @@ def train_model():
 
 @app.route('/api/query', methods=['POST'])
 def process_query():
+    """Process a natural language query and return SQL and results
+    
+    This follows the pattern from the vanna-flask repository but is adapted
+    to work with our specific implementation requirements.
+    """
     try:
         start_time = time.time()
         
@@ -1136,110 +1247,51 @@ def process_query():
             if field not in connection_info:
                 return jsonify({"error": f"Missing connection field: {field}"}), 400
         
-        # Create a connection string
+        # Log the connection info for reference (in demo mode, we don't actually connect)
         conn_type = connection_info['type']
-        if conn_type == 'mysql':
-            conn_str = f"mysql+pymysql://{connection_info['username']}:{connection_info['password']}@{connection_info['host']}:{connection_info['port']}/{connection_info['database']}"
-        elif conn_type == 'postgresql':
-            conn_str = f"postgresql://{connection_info['username']}:{connection_info['password']}@{connection_info['host']}:{connection_info['port']}/{connection_info['database']}"
-        else:
-            return jsonify({"error": f"Unsupported database type: {conn_type}"}), 400
-        
-        # In demo mode, we don't actually connect to a database
-        # Just log the connection info for reference
         logger.info(f"Demo mode: Would connect to {conn_type} database at {connection_info['host']}:{connection_info['port']}/{connection_info['database']}")
-        # Create a placeholder for the engine
-        engine = None
         
-        # Always use the real Vanna API
-        try:
-            # Get API key from environment
-            api_key = os.environ.get("VANNA_API_KEY")
-            if api_key:
-                # Create a new instance of Vanna with the API key
-                vn = vanna.Vanna(api_key=api_key)
-                logger.info("Initializing Vanna with API key")
-            else:
-                # Create a new instance of Vanna
-                vn = vanna.Vanna()
-                # Use demo mode which doesn't require an API key
-                logger.info("Initializing Vanna in demo mode (no API key found)")
-                vn.init_vanna_model()
-        except Exception as e:
-            logger.error(f"Error initializing Vanna API: {str(e)}")
-            
-            # Try HTTP implementation if we have an API key
-            api_key = os.environ.get("VANNA_API_KEY")
-            if api_key and REQUESTS_AVAILABLE:
-                try:
-                    logger.info("Trying HTTPVanna implementation with API key for query")
-                    vn = HTTPVanna(api_key=api_key)
-                    logger.info("Successfully initialized HTTP implementation for query")
-                except Exception as e:
-                    logger.error(f"Error with HTTPVanna: {str(e)}")
-                    # Fall back to mock implementation if all else fails
-                    vn = MockVanna(api_key=api_key)
-                    logger.warning("Using mock implementation for query as last resort")
-            else:
-                # Only use mock as a fallback if real Vanna fails and HTTP implementation isn't available
-                logger.warning("Falling back to mock implementation as Vanna isn't available")
-                vn = MockVanna(api_key=api_key)
+        # Create a unique ID for this query
+        query_id = cache.generate_id(question=natural_language_query)
         
-        # Extract database schema information or use mock data
-        try:
-            # Always use mock tables for demo purposes to avoid connection errors
-            logger.info("Using mock schema for demo purposes")
-            mock_tables = [
-                "CREATE TABLE customers (customer_id VARCHAR PRIMARY KEY, company_name VARCHAR, contact_name VARCHAR, country VARCHAR);",
-                "CREATE TABLE products (product_id INT PRIMARY KEY, product_name VARCHAR, unit_price DECIMAL);",
-                "CREATE TABLE orders (order_id INT PRIMARY KEY, customer_id VARCHAR, order_date DATE);",
-                "CREATE TABLE order_details (order_id INT, product_id INT, quantity INT, unit_price DECIMAL);"
-            ]
-            
-            # For ChromaDB-based implementations, we can just use the local storage
-            if hasattr(vn, "chroma_client") and vn.chroma_client:
-                logger.info("Using ChromaDB for schema storage")
-                for ddl in mock_tables:
-                    try:
-                        # This will only store locally in ChromaDB, not try to call the API
-                        if hasattr(vn, "ddl_collection"):
-                            import hashlib
-                            ddl_id = hashlib.md5(ddl.encode()).hexdigest()
-                            vn.ddl_collection.add(documents=[ddl], ids=[ddl_id])
-                    except Exception as e:
-                        logger.error(f"Error storing DDL in ChromaDB: {str(e)}")
-            else:
-                # For API-based implementations, call the train_ddl method
-                for ddl in mock_tables:
-                    vn.train_ddl(ddl)
+        # Initialize the Vanna client
+        vn = get_vanna_client()
         
-        except Exception as e:
-            logger.error(f"Error setting up mock schema: {str(e)}")
-            # Continue even if this fails - we can still generate mock SQL
+        # Extract database schema information and train the model
+        train_with_sample_schema(vn)
         
         # Generate SQL from natural language
         try:
             generated_sql = vn.generate_sql(natural_language_query)
+            # Cache the SQL for future reference
+            cache.set(id=query_id, field='sql', value=generated_sql)
         except Exception as e:
             logger.error(f"Error generating SQL: {str(e)}")
             return jsonify({"error": f"SQL generation error: {str(e)}"}), 500
         
-        # Generate mock data for the executed SQL
+        # Get mock data for the query (since we're in demo mode)
         try:
-            # Always use mock data since we're in demo mode
             logger.info("Using mock data for demo purposes")
             result_data, columns = get_mock_data_for_query(generated_sql)
+            
+            # Cache the results
+            cache.set(id=query_id, field='data', value=result_data)
+            cache.set(id=query_id, field='columns', value=columns)
             
             # Generate an explanation of the query
             try:
                 explanation = vn.ask(f"Explain what this SQL query does: {generated_sql}")
-            except:
+                cache.set(id=query_id, field='explanation', value=explanation)
+            except Exception as e:
+                logger.error(f"Error generating explanation: {str(e)}")
                 explanation = "No explanation available."
             
             end_time = time.time()
             execution_time = int((end_time - start_time) * 1000)  # Convert to milliseconds
+            cache.set(id=query_id, field='execution_time', value=execution_time)
             
             return jsonify({
+                "id": query_id,
                 "sql": generated_sql,
                 "data": result_data,
                 "columns": columns,
@@ -1250,6 +1302,7 @@ def process_query():
             logger.error(f"Error executing SQL: {str(e)}")
             traceback_str = traceback.format_exc()
             return jsonify({
+                "id": query_id,
                 "sql": generated_sql,
                 "error": f"SQL execution error: {str(e)}",
                 "traceback": traceback_str
