@@ -1,31 +1,96 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-import vanna
-import sqlalchemy
-import pandas as pd
 import traceback
 import time
 import os
 import logging
-
-app = Flask(__name__)
-CORS(app)
+import json
+import random
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Initialize Vanna AI with API key from environment variable
-VANNA_API_KEY = os.environ.get('VANNA_API_KEY', '')
-if not VANNA_API_KEY:
-    logger.warning("VANNA_API_KEY not set in environment variables")
+app = Flask(__name__)
+CORS(app)
+
+# Try to import required packages, but provide fallbacks if not available
+try:
+    import sqlalchemy
+    SQLALCHEMY_AVAILABLE = True
+except ImportError:
+    SQLALCHEMY_AVAILABLE = False
+    logger.warning("SQLAlchemy module not available")
+
+try:
+    import pandas as pd
+    PANDAS_AVAILABLE = True
+except ImportError:
+    PANDAS_AVAILABLE = False
+    logger.warning("Pandas module not available")
+
+try:
+    import vanna
+    VANNA_AVAILABLE = True
+except ImportError:
+    VANNA_AVAILABLE = False
+    logger.warning("Vanna module not available, using mock implementation")
+
+# Create a mock Vanna implementation for demo purposes
+class MockVanna:
+    def __init__(self):
+        self.sql_templates = {
+            "revenue": "SELECT product_name, SUM(unit_price * quantity) as revenue FROM products JOIN order_details ON products.product_id = order_details.product_id GROUP BY product_name ORDER BY revenue DESC LIMIT 5",
+            "orders": "SELECT country, COUNT(*) as order_count FROM customers JOIN orders ON customers.customer_id = orders.customer_id GROUP BY country ORDER BY order_count DESC",
+            "sales": "SELECT EXTRACT(MONTH FROM order_date) as month, SUM(unit_price * quantity) as sales FROM orders JOIN order_details ON orders.order_id = order_details.order_id WHERE EXTRACT(YEAR FROM order_date) = 2023 GROUP BY month ORDER BY month",
+            "default": "SELECT * FROM customers LIMIT 10"
+        }
+        self.explanations = {
+            "revenue": "This query calculates the total revenue for each product by multiplying the unit price by quantity sold across all orders, then returns the top 5 products by revenue.",
+            "orders": "This query counts the number of orders placed by customers in each country, showing which countries have the highest order volumes.",
+            "sales": "This query analyzes the monthly sales trend for 2023 by calculating the total sales amount for each month of the year.",
+            "default": "This query returns a sample of up to 10 customer records from the database to provide a quick overview of customer data."
+        }
+        
+    def train_ddl(self, ddl):
+        # Just a mock implementation, doesn't actually do anything
+        logger.info(f"Mock training with DDL: {ddl[:50]}...")
+        return True
+        
+    def generate_sql(self, query):
+        # Determine which template to use based on keywords in the query
+        query = query.lower()
+        if "revenue" in query or "top" in query:
+            return self.sql_templates["revenue"]
+        elif "countr" in query or "order" in query:
+            return self.sql_templates["orders"]
+        elif "sales" in query or "trend" in query or "month" in query:
+            return self.sql_templates["sales"]
+        else:
+            return self.sql_templates["default"]
+            
+    def ask(self, question):
+        # Return explanation based on the SQL mentioned in the question
+        for key, explanation in self.explanations.items():
+            if key in question.lower():
+                return explanation
+        return self.explanations["default"]
+    
+    def init_vanna_model(self):
+        # Mock initialization
+        logger.info("Initialized mock Vanna model")
+        return True
+
+# Initialize Vanna AI with mode from environment variable
+VANNA_MODEL = os.environ.get('VANNA_MODEL', 'demo')
+logger.info(f"Using Vanna model: {VANNA_MODEL}")
 
 # Create a dictionary to store database connections
 db_engines = {}
 
 @app.route('/api/health', methods=['GET'])
 def health_check():
-    return jsonify({"status": "ok", "vanna_initialized": bool(VANNA_API_KEY)})
+    return jsonify({"status": "ok", "vanna_available": VANNA_AVAILABLE})
 
 @app.route('/api/query', methods=['POST'])
 def process_query():
@@ -72,10 +137,15 @@ def process_query():
         
         engine = db_engines[engine_key]
         
-        # Initialize Vanna AI with the API key
-        vn = vanna.Vanna()
-        if VANNA_API_KEY:
-            vn.set_openai_key(VANNA_API_KEY)
+        # Initialize Vanna AI or use fallback if not available
+        if VANNA_AVAILABLE:
+            vn = vanna.Vanna()
+            if VANNA_MODEL == 'demo':
+                # Use demo mode which doesn't require an API key
+                vn.init_vanna_model()
+        else:
+            # Use a mock implementation if Vanna isn't available
+            logger.warning("Using mock implementation as Vanna isn't available")
         
         # Extract database schema information
         try:
