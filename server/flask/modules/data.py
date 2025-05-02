@@ -18,9 +18,21 @@ def execute_query(sql_query):
         Tuple of (results, column_names)
     """
     try:
+        # Clean up the SQL query (remove markdown code formatting like ```sql)
+        clean_sql = sql_query
+        if "```" in clean_sql:
+            # Extract the SQL from markdown code blocks
+            import re
+            sql_match = re.search(r"```(?:sql)?\s*([\s\S]+?)\s*```", clean_sql)
+            if sql_match:
+                clean_sql = sql_match.group(1).strip()
+            else:
+                # Just remove the backticks if regex doesn't match
+                clean_sql = clean_sql.replace("```sql", "").replace("```", "").strip()
+        
         # Use the Northwind database connection to execute the query
-        logger.info(f"Executing SQL query: {sql_query[:100]}...")
-        return northwind_db.execute_query(sql_query)
+        logger.info(f"Executing SQL query: {clean_sql[:100]}...")
+        return northwind_db.execute_query(clean_sql)
     except Exception as e:
         logger.error(f"Error executing SQL query: {str(e)}")
         # Return empty result if there's an error

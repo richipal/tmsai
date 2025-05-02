@@ -156,8 +156,12 @@ def register_routes(app):
                 if field not in connection_info:
                     return jsonify({"error": f"Missing connection field: {field}"}), 400
             
-            # Override the connection type to ensure we're using PostgreSQL
+            # Override the connection settings to ensure we're using PostgreSQL with the correct port
             connection_info['type'] = 'postgresql'
+            
+            # PostgreSQL typically uses port 5432, so if it's 3306 (MySQL's default port), change it
+            if connection_info['port'] == 3306:
+                connection_info['port'] = 5432
             
             # Log the connection info for reference
             conn_type = connection_info['type'] 

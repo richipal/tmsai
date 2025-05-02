@@ -804,7 +804,20 @@ class DirectVannaClient:
                     }],
                     temperature=0.2)
 
+                # Get the content from OpenAI response
                 sql = response.choices[0].message.content.strip()
+                
+                # Clean up the SQL if it has markdown formatting
+                if "```" in sql:
+                    # Extract the SQL from markdown code blocks
+                    import re
+                    sql_match = re.search(r"```(?:sql)?\s*([\s\S]+?)\s*```", sql)
+                    if sql_match:
+                        sql = sql_match.group(1).strip()
+                    else:
+                        # Just remove the backticks if regex doesn't match
+                        sql = sql.replace("```sql", "").replace("```", "").strip()
+                
                 logger.info(f"Generated SQL with OpenAI: {sql[:100]}...")
                 return sql
             except Exception as e:
