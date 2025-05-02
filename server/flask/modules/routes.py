@@ -9,7 +9,7 @@ from flask import request, jsonify
 
 from .config import DEFAULT_EXAMPLES, REQUESTS_AVAILABLE, VANNA_AVAILABLE
 from .cache import MemoryCache
-from .data import get_mock_data_for_query
+from .data import get_mock_data_for_query, execute_query
 from .training import train_with_sample_schema
 from .clients import initialize_vanna_client
 
@@ -179,10 +179,10 @@ def register_routes(app):
                 logger.error(f"Error generating SQL: {str(e)}")
                 return jsonify({"error": f"SQL generation error: {str(e)}"}), 500
             
-            # Get mock data for the query (since we're in demo mode)
+            # Execute the SQL query against the real database
             try:
-                logger.info("Using mock data for demo purposes")
-                result_data, columns = get_mock_data_for_query(generated_sql)
+                logger.info("Executing SQL query against the database")
+                result_data, columns = execute_query(generated_sql)
                 
                 # Cache the results
                 cache.set(id=query_id, field='data', value=result_data)

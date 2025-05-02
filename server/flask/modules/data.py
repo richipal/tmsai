@@ -1,13 +1,42 @@
 """
-Data generation functionality for the Flask application
+Data generation and retrieval functionality for the Flask application.
 """
 import logging
+from .northwind_db import northwind_db
 
 # Initialize logging
 logger = logging.getLogger(__name__)
 
+def execute_query(sql_query):
+    """
+    Execute a SQL query against the Northwind database
+    
+    Args:
+        sql_query: SQL query to execute
+        
+    Returns:
+        Tuple of (results, column_names)
+    """
+    try:
+        # Use the Northwind database connection to execute the query
+        logger.info(f"Executing SQL query: {sql_query[:100]}...")
+        return northwind_db.execute_query(sql_query)
+    except Exception as e:
+        logger.error(f"Error executing SQL query: {str(e)}")
+        # Fall back to mock data if there's an error
+        return get_mock_data_for_query(sql_query)
+
 def get_mock_data_for_query(sql_query):
-    """Generate mock data that would reasonably match the given SQL query"""
+    """
+    Generate mock data that would reasonably match the given SQL query.
+    This is a fallback when the real database is not available.
+    
+    Args:
+        sql_query: SQL query to mock results for
+        
+    Returns:
+        Tuple of (data, columns)
+    """
     sql_lower = sql_query.lower()
     
     # Mock data for revenue query
@@ -62,4 +91,34 @@ def get_mock_data_for_query(sql_query):
         ]
         columns = ["customer_id", "company_name", "contact_name", "country"]
     
+    logger.info("Using mock data (fallback)")
     return data, columns
+
+def get_database_schema():
+    """
+    Get the Northwind database schema as DDL statements
+    
+    Returns:
+        List of DDL statements
+    """
+    try:
+        return northwind_db.get_schema_ddl()
+    except Exception as e:
+        logger.error(f"Error getting database schema: {str(e)}")
+        # Fallback to default schema from config
+        from .config import NORTHWIND_SCHEMA
+        return NORTHWIND_SCHEMA
+
+def get_database_documentation():
+    """
+    Get documentation for tables in the Northwind database
+    
+    Returns:
+        List of table documentation dictionaries
+    """
+    try:
+        return northwind_db.get_database_documentation()
+    except Exception as e:
+        logger.error(f"Error getting database documentation: {str(e)}")
+        # Return empty list as fallback
+        return []
