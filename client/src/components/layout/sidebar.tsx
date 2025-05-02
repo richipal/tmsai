@@ -13,107 +13,101 @@ export default function Sidebar() {
     <aside className="w-64 hidden md:block bg-white border-r border-gray-200 overflow-y-auto">
       <div className="px-4 py-5 sm:p-6">
         <nav className="space-y-1" aria-label="Sidebar">
-          <Link href="/">
-            <a
-              className={cn(
-                "flex items-center px-3 py-2 text-sm font-medium rounded-md",
-                isActive("/")
-                  ? "bg-primary-50 text-primary-700"
-                  : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
-              )}
-              aria-current={isActive("/") ? "page" : undefined}
-            >
-              <LayoutDashboard className={cn(
-                "mr-3 h-5 w-5",
-                isActive("/") ? "text-primary-500" : "text-gray-400"
-              )} />
-              <span className="truncate">Dashboard</span>
-            </a>
+          <Link 
+            href="/"
+            className={cn(
+              "flex items-center px-3 py-2 text-sm font-medium rounded-md",
+              isActive("/")
+                ? "bg-primary-50 text-primary-700"
+                : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+            )}
+            aria-current={isActive("/") ? "page" : undefined}
+          >
+            <LayoutDashboard className={cn(
+              "mr-3 h-5 w-5",
+              isActive("/") ? "text-primary-500" : "text-gray-400"
+            )} />
+            <span className="truncate">Dashboard</span>
           </Link>
 
-          <Link href="/query-history">
-            <a
-              className={cn(
-                "flex items-center px-3 py-2 text-sm font-medium rounded-md",
-                isActive("/query-history")
-                  ? "bg-primary-50 text-primary-700"
-                  : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
-              )}
-            >
-              <History className={cn(
-                "mr-3 h-5 w-5",
-                isActive("/query-history") ? "text-primary-500" : "text-gray-400"
-              )} />
-              <span className="truncate">Query History</span>
-            </a>
+          <Link 
+            href="/query-history"
+            className={cn(
+              "flex items-center px-3 py-2 text-sm font-medium rounded-md",
+              isActive("/query-history")
+                ? "bg-primary-50 text-primary-700"
+                : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+            )}
+          >
+            <History className={cn(
+              "mr-3 h-5 w-5",
+              isActive("/query-history") ? "text-primary-500" : "text-gray-400"
+            )} />
+            <span className="truncate">Query History</span>
           </Link>
 
-          <Link href="/saved-queries">
-            <a
-              className={cn(
-                "flex items-center px-3 py-2 text-sm font-medium rounded-md",
-                isActive("/saved-queries")
-                  ? "bg-primary-50 text-primary-700"
-                  : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
-              )}
-            >
-              <Bookmark className={cn(
-                "mr-3 h-5 w-5",
-                isActive("/saved-queries") ? "text-primary-500" : "text-gray-400"
-              )} />
-              <span className="truncate">Saved Queries</span>
-            </a>
+          <Link 
+            href="/saved-queries"
+            className={cn(
+              "flex items-center px-3 py-2 text-sm font-medium rounded-md",
+              isActive("/saved-queries")
+                ? "bg-primary-50 text-primary-700"
+                : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+            )}
+          >
+            <Bookmark className={cn(
+              "mr-3 h-5 w-5",
+              isActive("/saved-queries") ? "text-primary-500" : "text-gray-400"
+            )} />
+            <span className="truncate">Saved Queries</span>
           </Link>
 
-          <Link href="/database-schema">
-            <a
-              className={cn(
-                "flex items-center px-3 py-2 text-sm font-medium rounded-md",
-                isActive("/database-schema")
-                  ? "bg-primary-50 text-primary-700"
-                  : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
-              )}
-            >
-              <Database className={cn(
-                "mr-3 h-5 w-5",
-                isActive("/database-schema") ? "text-primary-500" : "text-gray-400"
-              )} />
-              <span className="truncate">Database Schema</span>
-            </a>
+          <Link 
+            href="/database-schema"
+            className={cn(
+              "flex items-center px-3 py-2 text-sm font-medium rounded-md",
+              isActive("/database-schema")
+                ? "bg-primary-50 text-primary-700"
+                : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+            )}
+          >
+            <Database className={cn(
+              "mr-3 h-5 w-5",
+              isActive("/database-schema") ? "text-primary-500" : "text-gray-400"
+            )} />
+            <span className="truncate">Database Schema</span>
           </Link>
 
-          <Link href="/training-data">
-            <a
-              className={cn(
-                "flex items-center px-3 py-2 text-sm font-medium rounded-md",
-                isActive("/training-data")
-                  ? "bg-primary-50 text-primary-700"
-                  : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
-              )}
-            >
-              <Brain className={cn(
-                "mr-3 h-5 w-5",
-                isActive("/training-data") ? "text-primary-500" : "text-gray-400"
-              )} />
-              <span className="truncate">Training Data</span>
-            </a>
+          <Link 
+            href="/training-data"
+            className={cn(
+              "flex items-center px-3 py-2 text-sm font-medium rounded-md",
+              isActive("/training-data")
+                ? "bg-primary-50 text-primary-700"
+                : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+            )}
+          >
+            <Brain className={cn(
+              "mr-3 h-5 w-5",
+              isActive("/training-data") ? "text-primary-500" : "text-gray-400"
+            )} />
+            <span className="truncate">Training Data</span>
           </Link>
 
-          <Link href="/settings">
-            <a
-              className={cn(
-                "flex items-center px-3 py-2 text-sm font-medium rounded-md",
-                isActive("/settings")
-                  ? "bg-primary-50 text-primary-700"
-                  : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
-              )}
-            >
-              <Settings className={cn(
-                "mr-3 h-5 w-5",
-                isActive("/settings") ? "text-primary-500" : "text-gray-400"
-              )} />
-              <span className="truncate">Settings</span>
-            </a>
+          <Link 
+            href="/settings"
+            className={cn(
+              "flex items-center px-3 py-2 text-sm font-medium rounded-md",
+              isActive("/settings")
+                ? "bg-primary-50 text-primary-700"
+                : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+            )}
+          >
+            <Settings className={cn(
+              "mr-3 h-5 w-5",
+              isActive("/settings") ? "text-primary-500" : "text-gray-400"
+            )} />
+            <span className="truncate">Settings</span>
           </Link>
         </nav>
       </div>
@@ -126,10 +120,11 @@ export default function Sidebar() {
         <ul className="mt-3 space-y-2">
           {history?.slice(0, 5).map((query) => (
             <li key={query.id}>
-              <Link href={`/query-history/${query.id}`}>
-                <a className="block text-sm text-gray-600 hover:text-primary-600 truncate">
-                  {query.naturalLanguageQuery}
-                </a>
+              <Link 
+                href={`/query-history/${query.id}`}
+                className="block text-sm text-gray-600 hover:text-primary-600 truncate"
+              >
+                {query.naturalLanguageQuery}
               </Link>
             </li>
           ))}
