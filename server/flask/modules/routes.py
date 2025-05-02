@@ -9,7 +9,7 @@ from flask import request, jsonify
 
 from .config import DEFAULT_EXAMPLES, REQUESTS_AVAILABLE, VANNA_AVAILABLE
 from .cache import MemoryCache
-from .data import get_mock_data_for_query, execute_query
+from .data import execute_query
 from .training import train_with_sample_schema
 from .clients import initialize_vanna_client
 
@@ -45,7 +45,7 @@ def register_routes(app):
             "fallbacks": [
                 "Package-based Vanna API" if VANNA_AVAILABLE else None,
                 "HTTP-based Vanna API" if http_available else None,
-                "Mock implementation (always available)"
+                "PostgreSQL database (real data)"
             ]
         })
     
@@ -156,9 +156,9 @@ def register_routes(app):
                 if field not in connection_info:
                     return jsonify({"error": f"Missing connection field: {field}"}), 400
             
-            # Log the connection info for reference (in demo mode, we don't actually connect)
+            # Log the connection info for reference
             conn_type = connection_info['type']
-            logger.info(f"Demo mode: Would connect to {conn_type} database at {connection_info['host']}:{connection_info['port']}/{connection_info['database']}")
+            logger.info(f"Using real database connection: {conn_type} database at {connection_info['host']}:{connection_info['port']}/{connection_info['database']}")
             
             # Create a unique ID for this query
             query_id = cache.generate_id(question=natural_language_query)

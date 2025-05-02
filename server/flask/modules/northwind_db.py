@@ -70,8 +70,8 @@ class NorthwindDB:
         """
         if not self.connection:
             if not self._connect():
-                # Use mock data if connection fails
-                return self._get_mock_data(sql)
+                # Return empty result if connection fails
+                return self._get_empty_result(sql)
         
         try:
             # Record start time for query execution
@@ -106,8 +106,8 @@ class NorthwindDB:
         except Exception as e:
             logger.error(f"Error executing query: {str(e)}")
             logger.error(f"SQL: {sql}")
-            # Fall back to mock data on error
-            return self._get_mock_data(sql)
+            # Return empty result on error
+            return self._get_empty_result(sql)
     
     def get_table_schema(self, table_name: str) -> List[Dict[str, Any]]:
         """
@@ -324,101 +324,20 @@ class NorthwindDB:
         
         return documentation
     
-    def _get_mock_data(self, sql: str) -> Tuple[List[Dict[str, Any]], List[str]]:
+    def _get_empty_result(self, sql: str) -> Tuple[List[Dict[str, Any]], List[str]]:
         """
-        Generate mock data for SQL queries when database is unavailable
+        Return empty result when database is unavailable
         
         Args:
             sql: SQL query
             
         Returns:
-            Tuple of (results, column_names)
+            Tuple of (empty_results, basic_columns)
         """
-        logger.warning(f"Using mock data for query: {sql[:100]}...")
+        logger.error(f"Database unavailable for query: {sql[:100]}...")
         
-        # Default mock data
-        mock_data = []
-        columns = ["result"]
-        
-        # Simple pattern matching to generate relevant mock data
-        sql_lower = sql.lower()
-        
-        if "categories" in sql_lower:
-            columns = ["category_id", "category_name", "description"]
-            mock_data = [
-                {"category_id": 1, "category_name": "Beverages", "description": "Soft drinks, coffees, teas, beers, and ales"},
-                {"category_id": 2, "category_name": "Condiments", "description": "Sweet and savory sauces, relishes, spreads, and seasonings"},
-                {"category_id": 3, "category_name": "Confections", "description": "Desserts, candies, and sweet breads"},
-                {"category_id": 4, "category_name": "Dairy Products", "description": "Cheeses"}
-            ]
-        elif "products" in sql_lower:
-            columns = ["product_id", "product_name", "category_id", "supplier_id", "unit_price", "units_in_stock"]
-            mock_data = [
-                {"product_id": 1, "product_name": "Chai", "category_id": 1, "supplier_id": 1, "unit_price": 18.00, "units_in_stock": 39},
-                {"product_id": 2, "product_name": "Chang", "category_id": 1, "supplier_id": 1, "unit_price": 19.00, "units_in_stock": 17},
-                {"product_id": 3, "product_name": "Aniseed Syrup", "category_id": 2, "supplier_id": 1, "unit_price": 10.00, "units_in_stock": 13},
-                {"product_id": 4, "product_name": "Chef Anton's Cajun Seasoning", "category_id": 2, "supplier_id": 2, "unit_price": 22.00, "units_in_stock": 53}
-            ]
-        elif "customers" in sql_lower:
-            columns = ["customer_id", "company_name", "contact_name", "country"]
-            mock_data = [
-                {"customer_id": "ALFKI", "company_name": "Alfreds Futterkiste", "contact_name": "Maria Anders", "country": "Germany"},
-                {"customer_id": "ANATR", "company_name": "Ana Trujillo Emparedados y helados", "contact_name": "Ana Trujillo", "country": "Mexico"},
-                {"customer_id": "ANTON", "company_name": "Antonio Moreno Taquería", "contact_name": "Antonio Moreno", "country": "Mexico"}
-            ]
-        elif "orders" in sql_lower:
-            columns = ["order_id", "customer_id", "employee_id", "order_date", "freight"]
-            mock_data = [
-                {"order_id": 10248, "customer_id": "ALFKI", "employee_id": 1, "order_date": "2022-07-04", "freight": 32.38},
-                {"order_id": 10249, "customer_id": "ANATR", "employee_id": 1, "order_date": "2022-07-05", "freight": 11.61},
-                {"order_id": 10250, "customer_id": "ANTON", "employee_id": 2, "order_date": "2022-07-08", "freight": 65.83}
-            ]
-        elif "order_details" in sql_lower or "order details" in sql_lower:
-            columns = ["order_id", "product_id", "unit_price", "quantity", "discount"]
-            mock_data = [
-                {"order_id": 10248, "product_id": 1, "unit_price": 18.00, "quantity": 12, "discount": 0.00},
-                {"order_id": 10248, "product_id": 2, "unit_price": 19.00, "quantity": 10, "discount": 0.00},
-                {"order_id": 10249, "product_id": 3, "unit_price": 10.00, "quantity": 5, "discount": 0.15}
-            ]
-        elif "count" in sql_lower and "group by" in sql_lower and "country" in sql_lower:
-            # Handle count by country query
-            columns = ["country", "count"]
-            mock_data = [
-                {"country": "Germany", "count": 11},
-                {"country": "Mexico", "count": 5},
-                {"country": "UK", "count": 7},
-                {"country": "USA", "count": 13},
-                {"country": "France", "count": 9}
-            ]
-        elif "revenue" in sql_lower or "sales" in sql_lower:
-            # Handle revenue/sales queries
-            if "product" in sql_lower:
-                columns = ["product_name", "revenue"]
-                mock_data = [
-                    {"product_name": "Chai", "revenue": 4752.00},
-                    {"product_name": "Chang", "revenue": 3610.00},
-                    {"product_name": "Aniseed Syrup", "revenue": 1020.00},
-                    {"product_name": "Chef Anton's Cajun Seasoning", "revenue": 2860.00},
-                    {"product_name": "Queso Cabrales", "revenue": 1428.00}
-                ]
-            elif "category" in sql_lower:
-                columns = ["category_name", "revenue"]
-                mock_data = [
-                    {"category_name": "Beverages", "revenue": 8362.00},
-                    {"category_name": "Condiments", "revenue": 3880.00},
-                    {"category_name": "Dairy Products", "revenue": 5528.00},
-                    {"category_name": "Seafood", "revenue": 2772.00}
-                ]
-            elif "month" in sql_lower:
-                columns = ["month", "revenue"]
-                mock_data = [
-                    {"month": 1, "revenue": 12587.00},
-                    {"month": 2, "revenue": 14248.00},
-                    {"month": 3, "revenue": 13376.00},
-                    {"month": 4, "revenue": 15678.00}
-                ]
-        
-        return mock_data, columns
+        # Return empty result set
+        return [], ["error"]
 
 # Singleton instance
 northwind_db = NorthwindDB()

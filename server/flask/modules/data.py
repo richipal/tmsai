@@ -23,76 +23,21 @@ def execute_query(sql_query):
         return northwind_db.execute_query(sql_query)
     except Exception as e:
         logger.error(f"Error executing SQL query: {str(e)}")
-        # Fall back to mock data if there's an error
-        return get_mock_data_for_query(sql_query)
+        # Return empty result if there's an error
+        return get_empty_result(sql_query)
 
-def get_mock_data_for_query(sql_query):
+def get_empty_result(sql_query):
     """
-    Generate mock data that would reasonably match the given SQL query.
-    This is a fallback when the real database is not available.
+    Returns empty result set when database query fails
     
     Args:
-        sql_query: SQL query to mock results for
+        sql_query: SQL query that failed
         
     Returns:
-        Tuple of (data, columns)
+        Tuple of (empty_data, basic_columns)
     """
-    sql_lower = sql_query.lower()
-    
-    # Mock data for revenue query
-    if "revenue" in sql_lower or "sum" in sql_lower and "product" in sql_lower:
-        data = [
-            {"product_name": "Chai", "revenue": 4725.00},
-            {"product_name": "Raclette Courdavault", "revenue": 3950.00},
-            {"product_name": "Camembert Pierrot", "revenue": 3650.00},
-            {"product_name": "Gnocchi di nonna Alice", "revenue": 3300.00},
-            {"product_name": "Manjimup Dried Apples", "revenue": 2940.00}
-        ]
-        columns = ["product_name", "revenue"]
-    
-    # Mock data for orders by country
-    elif "country" in sql_lower and "order" in sql_lower:
-        data = [
-            {"country": "USA", "order_count": 122},
-            {"country": "Germany", "order_count": 87},
-            {"country": "Brazil", "order_count": 83},
-            {"country": "France", "order_count": 62},
-            {"country": "UK", "order_count": 56},
-            {"country": "Italy", "order_count": 41}
-        ]
-        columns = ["country", "order_count"]
-    
-    # Mock data for monthly sales
-    elif "month" in sql_lower or "sales" in sql_lower:
-        data = [
-            {"month": 1, "sales": 37850.00},
-            {"month": 2, "sales": 40125.00},
-            {"month": 3, "sales": 35600.00},
-            {"month": 4, "sales": 42300.00},
-            {"month": 5, "sales": 39450.00},
-            {"month": 6, "sales": 44200.00},
-            {"month": 7, "sales": 46500.00},
-            {"month": 8, "sales": 47800.00},
-            {"month": 9, "sales": 49300.00},
-            {"month": 10, "sales": 51450.00},
-            {"month": 11, "sales": 58200.00},
-            {"month": 12, "sales": 62500.00}
-        ]
-        columns = ["month", "sales"]
-    
-    # Default mock data (customers)
-    else:
-        data = [
-            {"customer_id": "ALFKI", "company_name": "Alfreds Futterkiste", "contact_name": "Maria Anders", "country": "Germany"},
-            {"customer_id": "ANATR", "company_name": "Ana Trujillo Emparedados", "contact_name": "Ana Trujillo", "country": "Mexico"},
-            {"customer_id": "ANTON", "company_name": "Antonio Moreno Taquería", "contact_name": "Antonio Moreno", "country": "Mexico"},
-            {"customer_id": "AROUT", "company_name": "Around the Horn", "contact_name": "Thomas Hardy", "country": "UK"},
-            {"customer_id": "BERGS", "company_name": "Berglunds snabbköp", "contact_name": "Christina Berglund", "country": "Sweden"}
-        ]
-        columns = ["customer_id", "company_name", "contact_name", "country"]
-    
-    logger.info("Using mock data (fallback)")
-    return data, columns
+    logger.error(f"Query failed, returning empty result: {sql_query[:100]}...")
+    return [], ["error"]
 
 def get_database_schema():
     """

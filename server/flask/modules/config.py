@@ -205,5 +205,6 @@ NORTHWIND_SCHEMA = [
     );"""
 ]
 
-# Use NORTHWIND_SCHEMA as the active schema
-MOCK_TABLES = NORTHWIND_SCHEMA
+# Maintain backward compatibility with legacy code, but this is no longer used
+# as we query the actual database schema directly
+MOCK_TABLES = []
