@@ -41,22 +41,45 @@ class NorthwindDB:
     def __init__(self):
         """Initialize the database connection"""
         self.connection = None
+        self.last_connection_attempt = 0
+        self.connection_retry_interval = 5  # seconds
         self._connect()
     
     def _connect(self) -> bool:
         """Connect to the PostgreSQL database"""
+        # If we recently tried to connect and failed, don't try again immediately
+        current_time = time.time()
+        if current_time - self.last_connection_attempt < self.connection_retry_interval:
+            return False
+        
+        self.last_connection_attempt = current_time
+        
+        # Close any existing connection that might be stale
+        self._close_connection()
+        
         if not PSYCOPG_AVAILABLE or not DB_URL:
             logger.warning("Cannot connect to PostgreSQL: missing dependencies or connection string")
             return False
         
         try:
-            self.connection = psycopg.connect(DB_URL)
+            # Create autocommit connection to avoid transaction issues
+            self.connection = psycopg.connect(DB_URL, autocommit=True)
             logger.info("Successfully connected to PostgreSQL database")
             return True
         except Exception as e:
             logger.error(f"Failed to connect to PostgreSQL: {str(e)}")
             self.connection = None
             return False
+    
+    def _close_connection(self):
+        """Close the current connection if it exists"""
+        if self.connection:
+            try:
+                self.connection.close()
+                logger.debug("Closed existing database connection")
+            except Exception as e:
+                logger.warning(f"Error closing connection: {str(e)}")
+            self.connection = None
     
     def execute_query(self, sql: str) -> Tuple[List[Dict[str, Any]], List[str]]:
         """
@@ -68,6 +91,7 @@ class NorthwindDB:
         Returns:
             Tuple of (results, column_names)
         """
+        # Try to ensure we have a valid connection
         if not self.connection:
             if not self._connect():
                 # Return empty result if connection fails
@@ -77,32 +101,76 @@ class NorthwindDB:
             # Record start time for query execution
             start_time = time.time()
             
-            with self.connection.cursor() as cursor:
-                cursor.execute(sql)
-                
-                # Get column names
-                columns = [desc[0] for desc in cursor.description] if cursor.description else []
-                
-                # Fetch all rows
-                rows = cursor.fetchall()
-                
-                # Convert rows to dictionaries
-                results = []
-                for row in rows:
-                    result_dict = {}
-                    for i, column_name in enumerate(columns):
-                        value = row[i]
-                        # Convert non-serializable types to strings
-                        if hasattr(value, 'isoformat'):  # For dates and times
-                            value = value.isoformat()
-                        result_dict[column_name] = value
-                    results.append(result_dict)
-                
-                # Calculate execution time
-                execution_time = int((time.time() - start_time) * 1000)  # Convert to milliseconds
-                logger.info(f"Query executed in {execution_time}ms: {sql[:100]}...")
-                
-                return results, columns
+            try:
+                # First attempt with existing connection
+                with self.connection.cursor() as cursor:
+                    cursor.execute(sql)
+                    
+                    # Get column names
+                    columns = [desc[0] for desc in cursor.description] if cursor.description else []
+                    
+                    # Fetch all rows
+                    rows = cursor.fetchall()
+                    
+                    # Convert rows to dictionaries
+                    results = []
+                    for row in rows:
+                        result_dict = {}
+                        for i, column_name in enumerate(columns):
+                            value = row[i]
+                            # Convert non-serializable types to strings
+                            if hasattr(value, 'isoformat'):  # For dates and times
+                                value = value.isoformat()
+                            result_dict[column_name] = value
+                        results.append(result_dict)
+                    
+                    # Calculate execution time
+                    execution_time = int((time.time() - start_time) * 1000)  # Convert to milliseconds
+                    logger.info(f"Query executed in {execution_time}ms: {sql[:100]}...")
+                    
+                    return results, columns
+            except Exception as e:
+                # If the connection is closed, try to reconnect once
+                if "connection is closed" in str(e) or "terminating connection" in str(e):
+                    logger.warning(f"Connection issue: {str(e)}. Attempting to reconnect...")
+                    
+                    # Try to reconnect
+                    if self._connect():
+                        # Retry the query with the new connection
+                        with self.connection.cursor() as cursor:
+                            cursor.execute(sql)
+                            
+                            # Get column names
+                            columns = [desc[0] for desc in cursor.description] if cursor.description else []
+                            
+                            # Fetch all rows
+                            rows = cursor.fetchall()
+                            
+                            # Convert rows to dictionaries
+                            results = []
+                            for row in rows:
+                                result_dict = {}
+                                for i, column_name in enumerate(columns):
+                                    value = row[i]
+                                    # Convert non-serializable types to strings
+                                    if hasattr(value, 'isoformat'):  # For dates and times
+                                        value = value.isoformat()
+                                    result_dict[column_name] = value
+                                results.append(result_dict)
+                            
+                            # Calculate execution time
+                            execution_time = int((time.time() - start_time) * 1000)  # Convert to milliseconds
+                            logger.info(f"Query executed in {execution_time}ms after reconnection: {sql[:100]}...")
+                            
+                            return results, columns
+                    else:
+                        # Reconnection failed
+                        logger.error("Failed to reconnect to database")
+                        return self._get_empty_result(sql)
+                else:
+                    # It's not a connection issue, so re-raise
+                    raise
+                        
         except Exception as e:
             logger.error(f"Error executing query: {str(e)}")
             logger.error(f"SQL: {sql}")

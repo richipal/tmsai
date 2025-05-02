@@ -156,8 +156,11 @@ def register_routes(app):
                 if field not in connection_info:
                     return jsonify({"error": f"Missing connection field: {field}"}), 400
             
+            # Override the connection type to ensure we're using PostgreSQL
+            connection_info['type'] = 'postgresql'
+            
             # Log the connection info for reference
-            conn_type = connection_info['type']
+            conn_type = connection_info['type'] 
             logger.info(f"Using real database connection: {conn_type} database at {connection_info['host']}:{connection_info['port']}/{connection_info['database']}")
             
             # Create a unique ID for this query
