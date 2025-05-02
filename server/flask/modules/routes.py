@@ -20,8 +20,8 @@ logger = logging.getLogger(__name__)
 cache = MemoryCache()
 
 # Initialize the client
-vanna_client = initialize_vanna_client()
-logger.info(f"Using Vanna client: {vanna_client.__class__.__name__}")
+vanna_client, client_type = initialize_vanna_client()
+logger.info(f"Using Vanna client: {client_type}")
 
 # Dictionary to store database connections
 db_engines = {}
