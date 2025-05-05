@@ -11,6 +11,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { useNaturalLanguageQuery, useExampleQuestions } from "@/hooks/use-query";
 import { useQuery } from "@tanstack/react-query";
 import { getDatabaseConnections } from "@/lib/flask-service";
+import { VannaQuery } from "@/components/query/vanna-query";
 
 export default function Dashboard() {
   // Get database connections
@@ -99,8 +100,7 @@ export default function Dashboard() {
                   </h2>
                   
                   {/* Import the VannaQuery component */}
-                  {/* Uncomment the line below when ready to use */}
-                  {/* <VannaQuery /> */}
+                  <VannaQuery />
                 </CardContent>
               </Card>
               
