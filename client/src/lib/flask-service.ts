@@ -183,3 +183,127 @@ export async function trainModel(data: { ddl?: string, documentation?: string, q
   const response = await apiRequest('POST', '/api/train', data);
   return await response.json();
 }
+
+
+/**
+ * Generate SQL from natural language
+ */
+export async function generateSql(question: string): Promise<{id: string, text: string}> {
+  const response = await fetch(`/api/v0/generate_sql?question=${encodeURIComponent(question)}`, {
+    credentials: 'include',
+  });
+  
+  if (!response.ok) {
+    throw new Error(`Failed to generate SQL: ${response.statusText}`);
+  }
+  
+  return await response.json();
+}
+
+/**
+ * Run SQL query
+ */
+export async function runSql(id: string): Promise<{id: string, df: string}> {
+  const response = await fetch(`/api/v0/run_sql?id=${encodeURIComponent(id)}`, {
+    credentials: 'include',
+  });
+  
+  if (!response.ok) {
+    throw new Error(`Failed to run SQL: ${response.statusText}`);
+  }
+  
+  return await response.json();
+}
+
+/**
+ * Generate Plotly figure
+ */
+export async function generatePlotlyFigure(id: string): Promise<{id: string, fig: string}> {
+  const response = await fetch(`/api/v0/generate_plotly_figure?id=${encodeURIComponent(id)}`, {
+    credentials: 'include',
+  });
+  
+  if (!response.ok) {
+    throw new Error(`Failed to generate figure: ${response.statusText}`);
+  }
+  
+  return await response.json();
+}
+
+/**
+ * Generate followup questions
+ */
+export async function generateFollowupQuestions(id: string): Promise<{id: string, questions: string[], header: string}> {
+  const response = await fetch(`/api/v0/generate_followup_questions?id=${encodeURIComponent(id)}`, {
+    credentials: 'include',
+  });
+  
+  if (!response.ok) {
+    throw new Error(`Failed to generate followup questions: ${response.statusText}`);
+  }
+  
+  return await response.json();
+}
+
+/**
+ * Get question history from Vanna
+ */
+export async function getVannaQuestionHistory(): Promise<{questions: {id: string, question: string}[]}> {
+  const response = await fetch('/api/v0/get_question_history', {
+    credentials: 'include',
+  });
+  
+  if (!response.ok) {
+    throw new Error(`Failed to get question history: ${response.statusText}`);
+  }
+  
+  return await response.json();
+}
+
+/**
+ * Load a question from Vanna
+ */
+export async function loadQuestion(id: string): Promise<{
+  id: string, 
+  question: string, 
+  sql: string, 
+  df: string, 
+  fig: string, 
+  followup_questions: string[]
+}> {
+  const response = await fetch(`/api/v0/load_question?id=${encodeURIComponent(id)}`, {
+    credentials: 'include',
+  });
+  
+  if (!response.ok) {
+    throw new Error(`Failed to load question: ${response.statusText}`);
+  }
+  
+  return await response.json();
+}
+
+/**
+ * Process a natural language query with Vanna
+ */
+export async function processQuery(query: string): Promise<{
+  id: string,
+  sql: string,
+  data: any[],
+  columns: string[],
+  explanation: string
+}> {
+  const response = await fetch('/api/query', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ query }),
+    credentials: 'include',
+  });
+  
+  if (!response.ok) {
+    throw new Error(`Failed to process query: ${response.statusText}`);
+  }
+  
+  return await response.json();
+}

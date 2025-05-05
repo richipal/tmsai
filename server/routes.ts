@@ -34,6 +34,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // API routes
   // --------------------------------------------------------
   
+  app.use('/api/v0', async (req, res) => {
+    try {
+      // Check if Flask service is running
+      await ensureFlaskService();
+      
+      // Proxy the request to the Flask service
+      const flaskUrl = `${FLASK_BASE_URL}/api/v0${req.url}`;
+      
+      const flaskResponse = await fetch(flaskUrl, {
+        method: req.method,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: req.method !== 'GET' ? JSON.stringify(req.body) : undefined,
+      });
+      
+      if (!flaskResponse.ok) {
+        const errorData = await flaskResponse.text();
+        throw new Error(`Flask service error: ${errorData}`);
+      }
+      
+      const data = await flaskResponse.json();
+      res.json(data);
+    } catch (error) {
+      console.error(`Error proxying request to Flask: ${error}`);
+      res.status(500).json({ error: `Failed to proxy request to Flask: ${error}` });
+    }
+  });
+  
   // Database connections
   app.get('/api/connections', async (req, res) => {
     try {

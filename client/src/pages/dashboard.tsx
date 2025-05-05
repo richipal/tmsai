@@ -76,6 +76,7 @@ export default function Dashboard() {
                     Ask Vanna in Natural Language
                   </h2>
                   
+                  {/* Original Query Input */}
                   <QueryInput 
                     value={queryInput}
                     onChange={setQueryInput}
@@ -87,6 +88,19 @@ export default function Dashboard() {
                     examples={examples}
                     onSelect={handleExampleQuerySelect}
                   />
+                </CardContent>
+              </Card>
+              
+              {/* Vanna AI Query Component */}
+              <Card className="bg-white shadow sm:rounded-lg overflow-hidden mb-6">
+                <CardContent className="px-4 py-5 sm:p-6">
+                  <h2 className="text-lg font-medium text-gray-900 mb-4">
+                    Vanna AI SQL Assistant
+                  </h2>
+                  
+                  {/* Import the VannaQuery component */}
+                  {/* Uncomment the line below when ready to use */}
+                  {/* <VannaQuery /> */}
                 </CardContent>
               </Card>
               

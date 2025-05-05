@@ -28,10 +28,69 @@ export async function startFlaskService() {
 
     console.log("Setting up Python environment for Flask...");
     
-    // Since we're running in Replit, we can directly use python3
-    startFlaskApp()
-      .then(resolve)
-      .catch(reject);
+    const venvPath = resolve(flaskPath, "venv");
+    if (!fs.existsSync(venvPath)) {
+      console.log("Creating virtual environment...");
+      const createVenvProcess = spawn("python3", ["-m", "venv", venvPath], {
+        cwd: flaskPath,
+        shell: true
+      });
+      
+      createVenvProcess.on("close", (code) => {
+        if (code !== 0) {
+          console.error(`Failed to create virtual environment: ${code}`);
+          reject(new Error(`Failed to create virtual environment: ${code}`));
+          return;
+        }
+        
+        installRequirements()
+          .then(() => startFlaskApp())
+          .then(resolve)
+          .catch(reject);
+      });
+    } else {
+      // Virtual environment exists, just start the Flask app
+      startFlaskApp()
+        .then(resolve)
+        .catch(reject);
+    }
+  });
+}
+
+/**
+ * Install Python requirements
+ */
+function installRequirements() {
+  return new Promise((resolve, reject) => {
+    console.log("Installing Python requirements...");
+    
+    const pipCommand = process.platform === "win32" 
+      ? resolve(flaskPath, "venv", "Scripts", "pip")
+      : resolve(flaskPath, "venv", "bin", "pip");
+    
+    const installProcess = spawn(pipCommand, ["install", "-r", resolve(flaskPath, "requirements.txt")], {
+      cwd: flaskPath,
+      shell: true
+    });
+    
+    installProcess.stdout.on("data", (data) => {
+      console.log(`pip: ${data}`);
+    });
+    
+    installProcess.stderr.on("data", (data) => {
+      console.error(`pip error: ${data}`);
+    });
+    
+    installProcess.on("close", (code) => {
+      if (code !== 0) {
+        console.error(`Failed to install requirements: ${code}`);
+        reject(new Error(`Failed to install requirements: ${code}`));
+        return;
+      }
+      
+      console.log("Requirements installed successfully");
+      resolve(true);
+    });
   });
 }
 
@@ -40,8 +99,10 @@ export async function startFlaskService() {
  */
 function startFlaskApp() {
   return new Promise((resolve, reject) => {
-    // Use the system Python directly
-    const pythonCommand = "python3";
+    // Use the virtual environment Python
+    const pythonCommand = process.platform === "win32" 
+      ? resolve(flaskPath, "venv", "Scripts", "python")
+      : resolve(flaskPath, "venv", "bin", "python");
     
     console.log("Starting Flask service...");
     // Set environment variables for the Flask app

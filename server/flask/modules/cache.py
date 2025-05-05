@@ -39,6 +39,20 @@ class MemoryCache:
         # Return the cached value
         return self.cache[id][field]
     
+    def get_all(self, field_list=None):
+        """Get all items with specified fields"""
+        result = []
+        for id in self.cache:
+            if field_list:
+                if all(field in self.cache[id] for field in field_list):
+                    item = {"id": id}
+                    for field in field_list:
+                        item[field] = self.cache[id][field]
+                    result.append(item)
+            else:
+                result.append({"id": id, **self.cache[id]})
+        return result
+    
     def clear(self, id=None):
         """Clear the cache for a specific ID or the entire cache"""
         if id is None:
